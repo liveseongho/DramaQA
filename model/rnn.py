@@ -14,7 +14,7 @@ class RNNEncoder(nn.Module):
     def __init__(self, word_embedding_size, hidden_size, bidirectional=True,
                  dropout_p=0, n_layers=1, rnn_type="lstm", return_hidden=True, return_outputs=True):
         super(RNNEncoder, self).__init__()
-        """  
+        """
         :param word_embedding_size: rnn input size
         :param hidden_size: rnn output size
         :param dropout_p: between rnn layers, only useful when n_layer >= 2
@@ -46,13 +46,13 @@ class RNNEncoder(nn.Module):
         - add total_length in pad_packed_sequence for compatiblity with nn.DataParallel, --remove it
         """
         assert len(inputs) == len(lengths)
-        
+
         sorted_inputs, sorted_lengths, reverse_indices = self.sort_batch(inputs, lengths)
         sorted_lengths_clamped = sorted_lengths.clamp(min=1, max=max(lengths))
         packed_inputs = pack_padded_sequence(sorted_inputs, sorted_lengths_clamped, batch_first=True)
 
         outputs, hidden = self.rnn(packed_inputs)
-        
+
         if self.return_outputs:
             # outputs, lengths = pad_packed_sequence(outputs, batch_first=True, total_length=int(max(lengths)))
             outputs, _ = pad_packed_sequence(outputs, batch_first=True)

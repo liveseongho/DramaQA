@@ -47,7 +47,6 @@
             "glove_path": "/data/dataset/AnotherMissOh/glove.6B.300d.txt",
             "vocab_path": "/data/dataset/AnotherMissOh/vocab.pickle",
 
-            "val_type": "all",
             "image_dim": 512,
 
             "max_word_per_sentence": 20,

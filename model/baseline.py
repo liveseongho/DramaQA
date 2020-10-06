@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from base import BaseModel
-import math
 from torch.autograd import Variable
 
 from . mlp import MLP
-from . rnn import RNNEncoder, max_along_time, mean_along_time
+from . rnn import RNNEncoder, mean_along_time
+
 
 class DotProdSim(BaseModel):
     def __init__(self, pt_emb, **kwargs):
@@ -29,6 +29,7 @@ class DotProdSim(BaseModel):
 
         return sim
 
+
 class LongestAnswer(BaseModel):
     def __init__(self, pt_emb, **kwargs):
         super().__init__()
@@ -38,6 +39,7 @@ class LongestAnswer(BaseModel):
 
         return al
 
+
 class ShortestAnswer(BaseModel):
     def __init__(self, pt_emb, **kwargs):
         super().__init__()
@@ -46,8 +48,6 @@ class ShortestAnswer(BaseModel):
         al = 1/x['ans_len']
 
         return al
-
-
 
 
 class RNNMLP(BaseModel):
@@ -64,8 +64,8 @@ class RNNMLP(BaseModel):
 
     def forward(self, x):
 
-        qa = [x['qa'].transpose(0,1)[i] for i in range(5)]
-        qa_l = [x['qa_l'].transpose(0,1)[i] for i in range(5)]
+        qa = [x['qa'].transpose(0, 1)[i] for i in range(5)]
+        qa_l = [x['qa_l'].transpose(0, 1)[i] for i in range(5)]
         sub, sub_l = x['filtered_sub'], x['filtered_sub_len']
 
         bbfts, bbfts_l = x['bbfts'], x['bbfts_l']

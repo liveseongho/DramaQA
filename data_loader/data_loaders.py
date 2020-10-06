@@ -14,7 +14,7 @@ import re
 from tqdm import tqdm
 import numpy as np
 
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from transformers import BertTokenizer
 import torchtext
 
@@ -198,67 +198,6 @@ class ImageData:
 
         return full_images
 
-    '''
-        for e in range(1, 18 + 1):
-            master_dict = full_images[e]
-            pfu_dict = person_fulls[e]
-            visual_dict = visuals[e]
-
-            for frame, info in master_dict.items():
-                if frame not in visual_dict: # no visual for this frame
-                    continue
-
-                visual = visual_dict[frame]
-                processed_persons = master_dict[frame]['persons']
-                for person in visual["persons"]:
-                    person_id = person['person_id'].title()
-                    person_id_idx = self.none_index if person_id == '' else speaker_index[person_id] # none -> None
-
-                    person_info = person['person_info']
-
-                    behavior = person_info['behavior'].lower()
-                    behavior_idx = self.pad_index if behavior == '' else self.vocab.get_index(behavior.split()[0])
-
-                    emotion = person_info['emotion'].lower()
-                    emotion_idx= self.pad_index if emotion == '' else self.vocab.get_index(emotion)
-
-                    processed = [person_id_idx, behavior_idx, emotion_idx] # Don't convert visual to a tensor yet
-                    processed_persons.append(processed)
-
-                # when processed_persons is empty, pfu_dict[frame] contains
-                # full_image feature. Just ignore this.
-                if processed_persons: # not empty
-                    master_dict[frame]['person_fulls'] = list(pfu_dict[frame]) # (N, C) np.array -> list of N arrays of shape (C,)
-
-        return full_images
-
-
-    def build_structure(self, args):
-        image_path = self.image_path
-        episode_dirs = sorted(e for e in os.listdir(image_path) if e.startswith("AnotherMissOh"))
-
-        episodes = {}
-
-        for e in episode_dirs:
-            episodes[get_episode_id(e)] = {}
-            scenes = episodes[get_episode_id(e)]
-
-            episode_path = Path(image_path) / e
-            scene_dirs = sorted(s for s in os.listdir(episode_path) if s.isnumeric())
-
-            for s in scene_dirs:
-                scenes[int(s)] = {}
-                shots = scenes[int(s)]
-
-                scene_path = episode_path / s
-                shot_dirs = sorted(sh for sh in os.listdir(scene_path) if sh.isnumeric())
-
-                for sh in shot_dirs:
-                    shot_path = scene_path / sh
-                    shots[int(sh)] = sorted(get_frame_id(f.split('.')[0]) for f in os.listdir(shot_path) if f.startswith('IMAGE'))
-
-        return episodes
-    '''
 
     def get_bbft(self, vid, flatten=False):
         bb_features = []
@@ -308,86 +247,9 @@ class ImageData:
 
         return bb_features, visual_graphs
 
-    '''
-    def get_image_by_vid(self, episode, scene, shot_contained):
-        first_shot = shot_contained[0]
-        last_shot = shot_contained[-1]
-        first_frame = self.structure[episode][scene][first_shot][0]
-        last_frame = self.structure[episode][scene][last_shot][-1]
-
-        return self.get_image_by_frame(episode, first_frame, last_frame + 1) # add + 1 to include last_frame
-
-    def get_image_by_time(self, episode, st, et):
-        return self.get_image_by_frame(episode, int(st * 25), int(et * 25))
-
-    def get_image_by_frame(self, episode, start_frame_id, end_frame_id):
-        frames_in_episode = self.image_dt[episode]
-
-        cnt = 0       # number of frames
-        mean_fi = 0   # mean of full_image features
-        all_fi = []   # list of full_image features  (aligned with person)
-        all_pfu = []  # list of person_full features (aligned with person)
-        all_v = []    # list of visuals              (aligned with person)
-        sample_v = [] # first visual in the range
-
-        cur_id = start_frame_id
-        added_8 = False
-        while cur_id < end_frame_id:
-            if cur_id in frames_in_episode: # found a frame in a certain shot
-                frame = frames_in_episode[cur_id]
-
-                p = frame['persons']
-                sample_v = p if sample_v == [] else sample_v
-                all_v.extend(p) # include all visual info of a frame
-
-                fi = frame['full_image']
-                mean_fi += fi
-                all_fi.extend(fi for i in range(len(p)))
-
-                pfu = frame['person_fulls']
-                all_pfu.extend(pfu)
-
-                cnt += 1
-
-                # adjacent frame ids in a shot differ by 8, so
-                # add 8 to cur_id to go to the next frame directly
-                cur_id += 8
-                added_8 = True
-            else:
-                if added_8:
-                    cur_id -= 8 # move back
-
-                # increment by 1 until a frame in a certain shot is found
-                cur_id += 1
-                added_8 = False
-
-        if cnt == 0:
-            mean_fi = np.zeros(self.image_dim)
-        else:
-            mean_fi /= cnt
-
-        if not all_fi: # empty
-            all_fi.append(np.zeros(self.image_dim))
-
-        if not sample_v: # empty
-            sample_v = self.visual_pad
-        else:
-            sample_v = sample_v[0] # just select the first one
-
-        if not all_v: # empty: all_v and all_v are empty at the same time
-            all_v = [self.visual_pad]
-            all_pfu.append(np.zeros(self.image_dim))
-
-        # Don't convert visual to tensors yet
-        return mean_fi, all_fi, sample_v, all_v, all_pfu
-    '''
 
 class TextData:
     def __init__(self, args, mode, vocab=None):
-        self.val_types = ['all', 'ch_only']
-        if args['val_type'] not in self.val_types:
-            raise ValueError('val_type should be ' + ' or '.join(self.val_types))
-
         self.args = args
 
         self.line_keys = ['que']
@@ -430,8 +292,6 @@ class TextData:
                 self.data = load_pickle(self.pickle_data_path[mode])
             else:
                 self.data = load_pickle(self.nc_data_path[mode])
-        #if args['val_type'] == 'ch_only' :
-        #    self.data['val'] = load_pickle(get_data_path(args, mode='val_ch_only', ext='.pickle'))
 
     # borrowed this implementation from load_glove of tvqa_dataset.py (TVQA),
     # which borrowed from @karpathy's neuraltalk.
