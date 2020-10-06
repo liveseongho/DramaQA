@@ -1,5 +1,5 @@
 # DramaQA
-DramaQA dataset is a large-scale video QA task based on a Korean popular TV show, `Another Miss Oh`.
+DramaQA dataset is a large-scale video QA task based on a Korean popular TV show, `Another Miss Oh`. This dataset contains four levels of QA on difficulty and character-centered video annotations. We are expecting this dataset could be a starting point to evaluate human level video story understanding. Please refer more detailed information on [DramaQA homepage](https://dramaqa.snu.ac.kr).
 
 <!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
@@ -16,11 +16,6 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
     * [Using Multiple GPU](#using-multiple-gpu)
 	* [Customization](#customization)
 		* [Custom CLI options](#custom-cli-options)
-		* [Data Loader](#data-loader)
-		* [Trainer](#trainer)
-		* [Model](#model)
-		* [Loss](#loss)
-		* [metrics](#metrics)
 		* [Additional logging](#additional-logging)
 		* [Validation data](#validation-data)
 		* [Checkpoints](#checkpoints)
@@ -49,15 +44,13 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 
 ## Folder Structure
   ```
-  pytorch-template/
+  DramaQA/
   │
   ├── train.py - main script to start training
   ├── test.py - evaluation of trained model
   │
   ├── config.json - holds configuration for training
   ├── parse_config.py - class to handle config file and cli options
-  │
-  ├── new_project.py - initialize new project with template files
   │
   ├── base/ - abstract base classes
   │   ├── base_data_loader.py
@@ -67,16 +60,10 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
   ├── data_loader/ - anything about data loading goes here
   │   └── data_loaders.py
   │
-  ├── data/ - default directory for storing input data
-  │
   ├── model/ - models, losses, and metrics
   │   ├── model.py
   │   ├── metric.py
   │   └── loss.py
-  │
-  ├── saved/
-  │   ├── models/ - trained models are saved here
-  │   └── log/ - default logdir for tensorboard and logging output
   │
   ├── trainer/ - trainers
   │   └── trainer.py
@@ -89,10 +76,22 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
   └── utils/ - small utility functions
       ├── util.py
       └── ...
+
+
+  data/AnotherMissOh/ - default directory for storing input data
+  ├── AnotherMissOh_images/
+  ├── AnotherMissOh_QA/
+  │
+  ├── AnotherMissOh_visual.json
+  └── AnotherMissOh_script.json
+
+  results/
+  ├── models/ - trained models are saved here
+  └── log/ - default logdir for tensorboard and logging output
   ```
 
 ## Usage
-The code in this repo is an MNIST example of the template.
+Download DramaQA dataset [here](https://dramaqa.snu.ac.kr/Download).
 Try `python train.py -c config.json` to run code.
 
 ### Config file format
@@ -181,11 +180,6 @@ Specify indices of available GPUs by cuda environmental variable.
 
 ## Customization
 
-### Project initialization
-Use the `new_project.py` script to make your new project directory with template files.
-`python new_project.py ../NewProject` then a new project folder named 'NewProject' will be made.
-This script will filter out unneccessary files like cache, git files or readme file.
-
 ### Custom CLI options
 
 Changing values of config file is a clean, safe and easy way of tuning hyperparameters. However, sometimes
@@ -209,82 +203,6 @@ for the learning rate option is `('optimizer', 'args', 'lr')` because `config['o
 which is increased to 256 by command line options.
 
 
-### Data Loader
-* **Writing your own data loader**
-
-1. **Inherit ```BaseDataLoader```**
-
-    `BaseDataLoader` is a subclass of `torch.utils.data.DataLoader`, you can use either of them.
-
-    `BaseDataLoader` handles:
-    * Generating next batch
-    * Data shuffling
-    * Generating validation data loader by calling
-    `BaseDataLoader.split_validation()`
-
-* **DataLoader Usage**
-
-  `BaseDataLoader` is an iterator, to iterate through batches:
-  ```python
-  for batch_idx, (x_batch, y_batch) in data_loader:
-      pass
-  ```
-* **Example**
-
-  Please refer to `data_loader/data_loaders.py` for an MNIST data loading example.
-
-### Trainer
-* **Writing your own trainer**
-
-1. **Inherit ```BaseTrainer```**
-
-    `BaseTrainer` handles:
-    * Training process logging
-    * Checkpoint saving
-    * Checkpoint resuming
-    * Reconfigurable performance monitoring for saving current best model, and early stop training.
-      * If config `monitor` is set to `max val_accuracy`, which means then the trainer will save a checkpoint `model_best.pth` when `validation accuracy` of epoch replaces current `maximum`.
-      * If config `early_stop` is set, training will be automatically terminated when model performance does not improve for given number of epochs. This feature can be turned off by passing 0 to the `early_stop` option, or just deleting the line of config.
-
-2. **Implementing abstract methods**
-
-    You need to implement `_train_epoch()` for your training process, if you need validation then you can implement `_valid_epoch()` as in `trainer/trainer.py`
-
-* **Example**
-
-  Please refer to `trainer/trainer.py` for MNIST training.
-
-* **Iteration-based training**
-
-  `Trainer.__init__` takes an optional argument, `len_epoch` which controls number of batches(steps) in each epoch.
-
-### Model
-* **Writing your own model**
-
-1. **Inherit `BaseModel`**
-
-    `BaseModel` handles:
-    * Inherited from `torch.nn.Module`
-    * `__str__`: Modify native `print` function to prints the number of trainable parameters.
-
-2. **Implementing abstract methods**
-
-    Implement the foward pass method `forward()`
-
-* **Example**
-
-  Please refer to `model/model.py` for a LeNet example.
-
-### Loss
-Custom loss functions can be implemented in 'model/loss.py'. Use them by changing the name given in "loss" in config file, to corresponding name.
-
-### Metrics
-Metric functions are located in 'model/metric.py'.
-
-You can monitor multiple metrics by providing a list in the configuration file, e.g.:
-  ```json
-  "metrics": ["accuracy", "top_k_acc"],
-  ```
 
 ### Additional logging
 If you have additional information to be logged, in `_train_epoch()` of your trainer class, merge them with `log` as shown below before returning:

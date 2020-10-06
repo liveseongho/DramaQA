@@ -111,7 +111,7 @@
         "save_period": 1,
         "verbosity": 2,
 
-        "monitor": "min val_accuracy",
+        "monitor": "max val_accuracy",
         "early_stop": 5,
 
         "tensorboard": true,
