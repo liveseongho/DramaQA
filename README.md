@@ -91,73 +91,9 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
   ```
 
 ## Usage
-Download DramaQA dataset [here](https://dramaqa.snu.ac.kr/Download).
-Try `python train.py -c config.json` to run code.
+* Download DramaQA dataset [here](https://dramaqa.snu.ac.kr/Download).
+* Try `python train.py -c config.json` to run code.
 
-### Config file format
-Config files are in `.json` format:
-```javascript
-{
-  "name": "Mnist_LeNet",        // training session name
-  "n_gpu": 1,                   // number of GPUs to use for training.
-
-  "arch": {
-    "type": "MnistModel",       // name of model architecture to train
-    "args": {
-
-    }
-  },
-  "data_loader": {
-    "type": "MnistDataLoader",         // selecting data loader
-    "args":{
-      "data_dir": "data/",             // dataset path
-      "batch_size": 64,                // batch size
-      "shuffle": true,                 // shuffle training data before splitting
-      "validation_split": 0.1          // size of validation dataset. float(portion) or int(number of samples)
-      "num_workers": 2,                // number of cpu processes to be used for data loading
-    }
-  },
-  "optimizer": {
-    "type": "Adam",
-    "args":{
-      "lr": 0.001,                     // learning rate
-      "weight_decay": 0,               // (optional) weight decay
-      "amsgrad": true
-    }
-  },
-  "loss": "nll_loss",                  // loss
-  "metrics": [
-    "accuracy", "top_k_acc"            // list of metrics to evaluate
-  ],
-  "lr_scheduler": {
-    "type": "StepLR",                  // learning rate scheduler
-    "args":{
-      "step_size": 50,
-      "gamma": 0.1
-    }
-  },
-  "trainer": {
-    "epochs": 100,                     // number of training epochs
-    "save_dir": "saved/",              // checkpoints are saved in save_dir/models/name
-    "save_freq": 1,                    // save checkpoints every save_freq epochs
-    "verbosity": 2,                    // 0: quiet, 1: per epoch, 2: full
-
-    "monitor": "min val_loss"          // mode and metric for model performance monitoring. set 'off' to disable.
-    "early_stop": 10	                 // number of epochs to wait before early stop. set 0 to disable.
-
-    "tensorboard": true,               // enable tensorboard visualization
-  }
-}
-```
-
-Add addional configurations if you need.
-
-### Using config files
-Modify the configurations in `.json` config files, then run:
-
-  ```
-  python train.py --config config.json
-  ```
 
 ### Resuming from checkpoints
 You can resume from a previously saved checkpoint by:
