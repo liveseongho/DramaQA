@@ -1,17 +1,14 @@
-import math
-import os
 from collections import defaultdict
 
-import PIL
 from PIL import Image
 from tqdm import tqdm
 
 import torch
 from torch import nn, utils
-from torchvision import models, datasets, transforms
+from torchvision import models, transforms
 from utils import *
 
-from .vision import VisionDataset
+from .modules_vision import VisionDataset
 
 image_types = ['full_image', 'person_full']
 image_size = [224, 224]
@@ -232,37 +229,27 @@ def extract_and_pool(tensor, model, device):
 
 def extract_features(args, dataset, model):
     """
-    full_images_by_episode = [
-        {}, # empty dict
-
-        { (episode1)
-            frame_id: vector, # shape: (C,)
-            ...
-        },
-
-        ...
-
-        { (episode18)
-            frame_id: vector,
+    full_images_by_episode = {
+        scene_id: {
+            vid: {
+                frame_id: vector, # shape: (C,)
+                ...
+            }
             ...
         }
-    ]
-
-    person_fulls_by_episode = [
-        {}, # empty dict
-
-        { (episode1)
-            frame_id: matrix, # shape: (N, C) N: number of person
-            ...
-        },
-
         ...
+    }
 
-        { (episode18)
-            frame_id: matrix,
+    person_fulls_by_episode = {
+        scene_id: {
+            vid: {
+                frame_id: matrix, # shape: (N, C) N: number of person
+                ...
+            }
             ...
         }
-    ]
+        ...
+    }
     """
 
     device = args['device']

@@ -3,10 +3,9 @@
 
 import os
 import torch
-import torch.utils.data as data
+from torch.utils.data import Dataset
 
-
-class VisionDataset(data.Dataset):
+class VisionDataset(Dataset):
     _repr_indent = 4
 
     def __init__(self, root, transforms=None, transform=None, target_transform=None):
