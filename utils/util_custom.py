@@ -1,6 +1,9 @@
 import re
 import numpy as np
 import torch
+import json
+from datetime import datetime
+
 
 def batch_to_device(args, batch, device):
     net_input_key = [*args]
@@ -85,11 +88,14 @@ def pad_tensor(x, val=0):
 def get_episode_id(vid):
     return int(vid[13:15]) # vid format: AnotherMissOh00_000_0000
 
+
 def get_scene_id(vid):
     return int(vid[16:19]) # vid format: AnotherMissOh00_000_0000
 
+
 def get_shot_id(vid):
     return int(vid[20:24]) # vid format: AnotherMissOh00_000_0000
+
 
 frame_id_re = re.compile('IMAGE_(\d+)')
 def get_frame_id(img_file_name):
