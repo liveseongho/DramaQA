@@ -69,10 +69,10 @@
                 "bbfts",
                 "bbfts_l",
                 "bbfts_l_l",
-                "vmeta",
-                "filtered_sub",
-                "filtered_sub_len"
+                "vmeta"
             ],
+            "script_type": "sentence",
+            "visual_type": "shot",
             "flatten": false
 
         }

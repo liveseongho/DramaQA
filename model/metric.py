@@ -41,14 +41,18 @@ def accuracy_diffN(output, target, difficulties, N):
         r = correct / n
     return r, n
 
+
 def accuracy_diff1(output, target, difficulties):
     return accuracy_diffN(output, target, difficulties, 1)
+
 
 def accuracy_diff2(output, target, difficulties):
     return accuracy_diffN(output, target, difficulties, 2)
 
+
 def accuracy_diff3(output, target, difficulties):
     return accuracy_diffN(output, target, difficulties, 3)
+
 
 def accuracy_diff4(output, target, difficulties):
     return accuracy_diffN(output, target, difficulties, 4)

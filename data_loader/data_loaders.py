@@ -3,20 +3,17 @@ from base import BaseDataLoader
 from collections import defaultdict
 
 import torch
-import nltk
 
 from utils import *
 from .preprocess_script import merge_qa_subtitle, empty_sub
 from .preprocess_image import preprocess_images
-from .modules_language import Vocab
+from .modules_language import Vocab, get_tokenizer
 import os
 import re
 from tqdm import tqdm
 import numpy as np
 
 from torch.utils.data import Dataset
-from transformers import BertTokenizer
-import torchtext
 
 # debug
 from pprint import pprint
@@ -61,39 +58,14 @@ class ImageData:
         features, visuals = preprocess_images(args)
 
         """
-        After:
-
-        full_images = [
-            {}, # empty dict
-
-            { (episode1)
-                frame_id1: {
-                    full_image:   full_image (tensor of shape (512,)),
-                    persons:      [[person1_id_idx, behavior1_idx, emotion1_idx], ...],
-                    person_fulls: [person_full1 (tensor of shape (512,)), ... ]
-                },
-                ...
-            },
-
-            ...
-
-            { (episode18)
-                ...
-            }
-        ]
+        {
+            full_image:   full_image (tensor of shape (512,)),
+            persons:      [[person1_id_idx, behavior1_idx, emotion1_idx], ...],
+            person_fulls: [person_full1 (tensor of shape (512,)), ... ]
+        }
         """
         full_images = features['full_image']
         person_fulls = features['person_full']
-
-        '''
-        for frames in full_images:
-            for key, value in frames.items():
-                frames[key] = {
-                    'full_image': value,
-                    'persons': [],
-                    'person_fulls': []
-                }
-        '''
 
         new_visuals = defaultdict(dict)
         for i in range(1, 19):
@@ -213,6 +185,7 @@ class TextData:
         self.subtitle_path = args['subtitle_path']
         self.visual_path = args['visual_path']
         self.json_data_path = {m: get_data_path(args, mode=m, ext='.json') for m in modes}
+
         self.pickle_data_path = {m: get_data_path(args, mode=m, ext='.pickle') for m in modes}
         self.nc_data_path = {m: get_data_path(args, mode=m, ext='_nc.pickle') for m in modes}
         self.bert_data_path = {m: get_data_path(args, mode=m, ext='_bert.pickle') for m in modes}
@@ -617,126 +590,80 @@ class MultiModalData(Dataset):
         all_pfu_l = []      # list of all person_full features
         sample_v_l = []     # list of one sample visual
         all_v_l = []        # list of all visual
-
-
-        max_sentence = self.args['max_sentence_per_scene']
-        if subtitle != empty_sub: # subtitle exists
-            subs = subtitle["contained_subs"]
-            n_sentence = 1
-
-            for s in subs:
-                if n_sentence > max_sentence:
-                    break
-                n_sentence = n_sentence + 1
-                spkr = s["speaker"]
-                utter = s["utter"]
-                spkr_of_sen_l.append(spkr)
-                if len(utter) > self.max_sen_len:
-                    del utter[self.max_sen_len:]
-                    utter[-1] = self.eos_index
-                #utter = [spkr]+utter ## tvqa
-                sub_in_sen_l.append(utter)
-
-                # # get image by st and et
-                # st = s["st"]
-                # et = s["et"]
-                # if et - st > 90:
-                #     et = st + 3
-                # mean_fi, all_fi, sample_v, all_v, all_pfu = self.image.get_image_by_time(episode, st, et)
-                # mean_fi_l.append(mean_fi)
-                # all_fi_l.extend(all_fi)
-                # sample_v_l.append(sample_v)
-                # all_v_l.extend(all_v)
-                # all_pfu_l.extend(all_pfu)
-        else: # No subtitle
-            spkr_of_sen_l.append(self.none_index) # add None speaker
-            sub_in_sen_l.append([self.pad_index]) # add <pad>
-
-        # Concatenate subtitle sentences
-        sub_in_word_l = []; spkr_of_word_l = []
-        max_sub_len = self.max_sub_len
-        n_words = 0
-        for spkr, s in zip(spkr_of_sen_l, sub_in_sen_l):
-            sen_len = len(s)
-            #n_words += sen_len+1 #### tvqa
-
-            sub_in_word_l.extend(s)
-            #sub_in_word_l.extend([spkr]) ### tvqa
-            spkr_of_word_l.extend(spkr for i in range(sen_len)) # 1:1 correspondence between word and speaker
-
-            if n_words > max_sub_len:
-                del sub_in_word_l[max_sub_len:], spkr_of_word_l[max_sub_len:]
-                sub_in_word_l[-1] = self.eos_index
-
-                break
-
-
-        # get image by shot_contained
-        bb_features, visual_graphs = self.image.get_bbft(vid)
-
-        if self.args['flatten']:
-            # bb_features: [(num_frames*512), (num_frames*512), ...]
-            # visual_graphs: [(num_frames*3*512), ...]
-            bb_features = np.concatenate(bb_features, axis=0)
-            visual_graphs = np.concatenate(visual_graphs, axis=0)
-        '''
-        mean_fi, all_fi, sample_v, all_v, all_pfu = self.image.get_image_by_vid(episode, scene, shot_contained) # get all image in the scene/shot
-        mean_fi_l.append(mean_fi)
-        all_fi_l.extend(all_fi)
-        sample_v_l.append(sample_v)
-        all_v_l.extend(all_v)
-        all_pfu_l.extend(all_pfu)
-
-
-        # Remove paddings in between and flatten visuals
-        filtered_v = []; filtered_fi = []; filtered_pfu = []
-        max_img_len = self.max_image_len
-        n_img = 0
-        for v, fi, pfu in zip(all_v_l, all_fi_l, all_pfu_l):
-            if v != self.image.visual_pad:
-                filtered_v.extend(v) # flatten visuals
-                filtered_fi.append(fi)
-                filtered_pfu.append(pfu)
-                n_img += 1
-                if n_img > max_img_len:
-                    del filtered_fi[max_img_len:], filtered_v[max_img_len * 3:], filtered_pfu[max_img_len:]
-
-                    break
-
-        # Pad empty data
-        if not sub_in_word_l: # empty
-            sub_in_word_l.append(self.pad_index)
-            spkr_of_word_l.append(self.none_index)
-
-        if not filtered_v: # empty: filtered_v, filtered_fi, and filtered_pfu are empty at the same time
-            filtered_v = self.image.visual_pad
-            filtered_pfu.append(np.zeros(self.image_dim))
-            filtered_fi = all_fi_l # use all image
-            if len(filtered_fi) > max_img_len:
-                del filtered_fi[max_img_len:]
-        '''
         data = {
             'que': que,
             'ans': ans,
             'correct_idx': correct_idx,
 
-            'sub_in_sen': sub_in_sen_l,
-            'spkr_of_sen': spkr_of_sen_l,
-            #'mean_fi': mean_fi,
-
-            'spkr_of_word': spkr_of_word_l,
-            'sub_in_word': sub_in_word_l,
-            #'filtered_fi': filtered_fi,
-            #'filtered_v': filtered_v,
-            #'filtered_pfu': filtered_pfu,
-
-
-            'bbfts': bb_features,
-            'vgraphs': visual_graphs,
-
             'q_level_logic': q_level_logic,
             'qid': qid
         }
+
+        script_types = ['sentence', 'word']
+        assert self.args['script_type'] in script_types, "scrtip_type should be %s." % (' or '.join(script_types))
+
+        if self.args['script_type'] == 'sentence':
+            max_sentence = self.args['max_sentence_per_scene']
+            if subtitle != empty_sub: # subtitle exists
+                subs = subtitle["contained_subs"]
+                n_sentence = 1
+
+                for s in subs:
+                    if n_sentence > max_sentence:
+                        break
+                    n_sentence = n_sentence + 1
+                    spkr = s["speaker"]
+                    utter = s["utter"]
+                    spkr_of_sen_l.append(spkr)
+                    if len(utter) > self.max_sen_len:
+                        del utter[self.max_sen_len:]
+                        utter[-1] = self.eos_index
+                    # utter = [spkr]+utter ## tvqa
+                    sub_in_sen_l.append(utter)
+
+            else: # No subtitle
+                spkr_of_sen_l.append(self.none_index) # add None speaker
+                sub_in_sen_l.append([self.pad_index]) # add <pad>
+
+            data['sub_in_sen'] = sub_in_sen_l
+            data['spkr_of_sen'] = spkr_of_sen_l
+
+        elif self.args['script_type'] == 'word':
+            # Concatenate subtitle sentences
+            sub_in_word_l = []; spkr_of_word_l = []
+            max_sub_len = self.max_sub_len
+            n_words = 0
+            for spkr, s in zip(spkr_of_sen_l, sub_in_sen_l):
+                sen_len = len(s)
+                #n_words += sen_len+1 #### tvqa
+
+                sub_in_word_l.extend(s)
+                #sub_in_word_l.extend([spkr]) ### tvqa
+                spkr_of_word_l.extend(spkr for i in range(sen_len)) # 1:1 correspondence between word and speaker
+
+                if n_words > max_sub_len:
+                    del sub_in_word_l[max_sub_len:], spkr_of_word_l[max_sub_len:]
+                    sub_in_word_l[-1] = self.eos_index
+
+                    break
+
+            data['sub_in_word'] = sub_in_word_l
+            data['spkr_of_word'] = spkr_of_word_l
+
+
+        visual_types = ['shot', 'frame']
+        assert self.args['visual_type'] in visual_types, "visual_typoe should be %s." % (' or '.join(visual_types))
+
+        vfeatures, vmetas = self.image.get_bbft(vid)
+
+        if self.args['visual_type'] == 'frame':
+            # vfeatures: [(num_frames*512), (num_frames*512), ...]
+            # vmetas: [(num_frames*3*512), ...]
+            vfeatures = np.concatenate(vfeatures, axis=0)
+            vmetas = np.concatenate(vmetas, axis=0)
+
+        data['bbfts'] = vfeatures
+        data['vgraphs'] = vmetas
 
         # currently not tensor yet
         return data
@@ -753,66 +680,48 @@ class MultiModalData(Dataset):
         qa_concat, _, qa_concat_l = self.pad3d(qa_concat, self.pad_index, int_dtype)
         correct_idx = torch.tensor(collected['correct_idx'], dtype=int_dtype) if self.mode != 'test' else None # correct_idx does not have to be padded
 
-        spkr_of_s, _ = self.pad2d(collected['spkr_of_sen'], self.none_index, int_dtype)
-        #mean_fi, _, _ = self.pad3d(collected['mean_fi'], 0, float_dtype)
-
-
-        sub_in_s, sub_in_s_l, sub_s_l = self.pad3d(collected['sub_in_sen'], self.pad_index, int_dtype)
-
-        if self.args['flatten']:
-            bbfts, bbfts_l = self.pad2d(collected['bbfts'], 0, float_dtype, reshape3d=True, last_dim=self.image_dim)
-            bbfts_l_l = None
-            vgraphs, vgraphs_l = self.pad2d(collected['vgraphs'], self.image.visual_pad, int_dtype)
-            vgraphs_l_l = None
-        else:
-            bbfts, bbfts_l, bbfts_l_l = self.pad3d(collected['bbfts'], 0, float_dtype, reshape4d=True, last_dim=self.image_dim)
-            vgraphs, vgraphs_l, vgraphs_l_l = self.pad3d(collected['vgraphs'], self.image.visual_pad, int_dtype, reshape4d=True, last_dim=3)
-
-        #f_v, f_v_l = self.pad2d(collected['filtered_v'], self.image.visual_pad, int_dtype)
-        #f_fi, f_fi_l, _ = self.pad3d(collected['filtered_fi'], 0, float_dtype)
-        #f_pfu, f_pfu_l, _ = self.pad3d(collected['filtered_pfu'], 0, float_dtype)
-        spkr_of_w, _ = self.pad2d(collected['spkr_of_word'], self.none_index, int_dtype)
-        sub_in_w, sub_in_w_l = self.pad2d(collected['sub_in_word'], self.pad_index, int_dtype)
-
-        q_level_logic = collected['q_level_logic'] # No need to convert to torch.Tensor
-        qid = collected['qid'] # No need to convert to torch.Tensor
-
         data = {
-            'que': que,
-            'ans': ans,
-            'que_l': que_l,
-            'ans_l': ans_l,
-            'qa': qa_concat,
-            'qa_l': qa_concat_l,
-
-            'sub': sub_in_s,
-            'spkr': spkr_of_s,
-            #'images': mean_fi,
-            'sub_l': sub_in_s_l,
-            'sub_l_l': sub_s_l,
-
-            'bbfts': bbfts,
-            'bbfts_l': bbfts_l,
-            'bbfts_l_l': bbfts_l_l,
-            'vmeta': vgraphs,
-
-
-            #'filtered_visual': f_v,
-            'filtered_sub': sub_in_w,
-            #'filtered_speaker': spkr_of_w,
-            #'filtered_image': f_fi,
-            #'filtered_person_full': f_pfu,
-            #'filtered_visual_len': f_v_l,
-            'filtered_sub_len': sub_in_w_l,
-            #'filtered_image_len': f_fi_l,
-            #'filtered_person_full_len': f_pfu_l,
-
-            'q_level_logic': q_level_logic,
-            'qid': qid
+            'que': que, 'que_l': que_l,
+            'ans': ans, 'ans_l': ans_l,
+            'qa': qa_concat, 'qa_l': qa_concat_l,
+            'q_level_logic': collected['q_level_logic'],
+            'qid': collected['qid']
         }
         if correct_idx is not None:
             data['correct_idx'] = correct_idx
 
+        if self.args['script_type'] == 'word':
+            spkr_of_w, _ = self.pad2d(collected['spkr_of_word'], self.none_index, int_dtype)
+            sub_in_w, sub_in_w_l = self.pad2d(collected['sub_in_word'], self.pad_index, int_dtype)
+            data['filtered_sub'] = sub_in_w
+            data['filtered_sub_len'] = sub_in_w_l
+        elif self.args['script_type'] == 'sentence':
+            spkr_of_s, _ = self.pad2d(collected['spkr_of_sen'], self.none_index, int_dtype)
+            sub_in_s, sub_in_s_l, sub_s_l = self.pad3d(collected['sub_in_sen'], self.pad_index, int_dtype)
+            data['sub'] = sub_in_s
+            data['sub_l'] = sub_in_s_l
+            data['sub_l_l'] = sub_s_l
+            data['spkr'] = spkr_of_s
+
+        if self.args['visual_type'] == 'frame':
+            bbfts, bbfts_l = self.pad2d(collected['bbfts'], 0, float_dtype, reshape3d=True, last_dim=self.image_dim)
+            bbfts_l_l = None
+            vgraphs, vgraphs_l = self.pad2d(collected['vgraphs'], self.image.visual_pad, int_dtype)
+            vgraphs_l_l = None
+            data['bbfts'] = bbfts
+            data['bbfts_l'] = bbfts_l
+            data['bbfts_l_l'] = bbfts_l_l
+            data['vmeta'] = vgraphs
+        elif self.args['visual_type'] == 'shot':
+            bbfts, bbfts_l, bbfts_l_l = self.pad3d(collected['bbfts'], 0, float_dtype, reshape4d=True, last_dim=self.image_dim)
+            vgraphs, vgraphs_l, vgraphs_l_l = self.pad3d(collected['vgraphs'], self.image.visual_pad, int_dtype, reshape4d=True, last_dim=3)
+
+            data['bbfts'] = bbfts
+            data['bbfts_l'] = bbfts_l
+            data['bbfts_l_l'] = bbfts_l_l
+            data['vmeta'] = vgraphs
+
+        # currently not in the device yet
         return data
 
     def pad2d(self, data, pad_val, dtype, reshape3d=False, last_dim=0):
@@ -865,27 +774,6 @@ class MultiModalData(Dataset):
 
         return p_data, p_dim1_length, p_dim2_length
 
-def get_tokenizer(args, special_tokens=None):
-    if args['bert']:
-        tok = BertTokenizer.from_pretrained('bert-base-uncased')
-        '''
-            bos_token=sos_token,
-            eos_token=eos_token,
-            unk_token=unk_token,
-            pad_token=pad_token,
-            additional_special_tokens=speaker_name)
-        '''
-        for v in tok.vocab:
-            print(v.encode('utf-8').decode("utf-8") )
-        vocab = torchtext.vocab.Vocab(tok.vocab, min_freq=args['vocab_freq'], specials=[]) #
-        return tok, vocab
-    else:
-        tokenizers = {
-            'nltk': nltk.word_tokenize,
-            'nonword': re.compile(r'\W+').split,
-        }
-
-        return tokenizers[args['tokenizer'].lower()]
 
 
 class DramaQADataLoader(BaseDataLoader):

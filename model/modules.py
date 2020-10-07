@@ -11,19 +11,19 @@ from einops import rearrange
 class ContextMatching(nn.Module):
     def __init__(self, channel_size):
         super(ContextMatching, self).__init__()
-        
+
         self.mlp = nn.Linear(channel_size * 2, 1, bias=False)
 
     @classmethod
     def get_u_tile(cls, s, s2):
         a_weight = F.softmax(s, dim=2)  # [B, t1, t2]
         a_weight.data.masked_fill_(a_weight.data != a_weight.data, 0)  # remove nan from softmax on -inf
-        
+
         u_tile = torch.bmm(a_weight, s2)  # [B, t1, t2] * [B, t2, D] -> [B, t1, D]
         return u_tile
 
     def forward(self, s1, l1, s2, l2, mask2d=False):
-        t1 = s1.size(1) 
+        t1 = s1.size(1)
         t2 = s2.size(1)
         repeat_s1 = s1.unsqueeze(2).repeat(1, 1, t2, 1)  # [B, T1, T2, D]
         repeat_s2 = s2.unsqueeze(1).repeat(1, t1, 1, 1)  # [B, T1, T2, D]
@@ -44,14 +44,14 @@ class ContextMatching(nn.Module):
         else:
             l1 = l1.view(-1)
             s_mask = torch.arange(max(l1), device=l1.device).expand(len(l1), max(l1)) >= l1.unsqueeze(1)
-            s_mask = s_mask.view(s1.shape[0], -1).unsqueeze(2).repeat(1,1,max(l2))   
+            s_mask = s_mask.view(s1.shape[0], -1).unsqueeze(2).repeat(1,1,max(l2))
 
             for i, l_2 in enumerate(l2):
                 s_mask[i][:, l_2:] = True
             s.masked_fill_(s_mask, -float("inf"))
-        
+
         u_tile = self.get_u_tile(s, s2)
-        
+
         return u_tile
 
 

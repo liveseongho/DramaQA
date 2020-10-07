@@ -1,5 +1,4 @@
-__author__ = "Jie Lei"
-
+# from https://github.com/jayleicn/TVQA/blob/master/model/mlp.py
 import torch
 import torch.nn as nn
 
@@ -44,4 +43,3 @@ if __name__ == '__main__':
     print("=" * 20)
     print(mlp3)
     print(mlp3(test_in).size())
-

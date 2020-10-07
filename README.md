@@ -10,8 +10,6 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 	* [Features](#features)
 	* [Folder Structure](#folder-structure)
 	* [Usage](#usage)
-		* [Config file format](#config-file-format)
-		* [Using config files](#using-config-files)
 		* [Resuming from checkpoints](#resuming-from-checkpoints)
     * [Using Multiple GPU](#using-multiple-gpu)
 	* [Customization](#customization)

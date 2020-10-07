@@ -153,7 +153,6 @@ class MemN2N(BaseModel):
         sub = self.linear_sub(self.embedding(sub))
         sub = self.sentence_embedding(sub, sub_l, sub_l_l)
 
-
         vis = self.embedding(vmeta)
         vis = vis.view(bbfts.shape[0], bbfts.shape[1], bbfts.shape[2], -1)
         vis = torch.cat([vis, bbfts], dim=3)

@@ -8,6 +8,7 @@ from datetime import datetime
 def batch_to_device(args, batch, device):
     net_input_key = [*args]
     net_input = {k: batch[k] for k in net_input_key}
+
     for key, value in net_input.items():
         if torch.is_tensor(value):
             net_input[key] = value.to(device).contiguous()

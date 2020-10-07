@@ -1,4 +1,7 @@
 import numpy as np
+from transformers import BertTokenizer
+import torchtext
+import nltk, re
 
 # Refer to https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
 # for information about subclassing np.ndarray
@@ -46,3 +49,26 @@ class Vocab(np.ndarray):
 
     def get_index(self, word):
         return self.stoi.get(word, self.stoi['<unk>'])
+
+
+def get_tokenizer(args, special_tokens=None):
+    if args['bert']:
+        tok = BertTokenizer.from_pretrained('bert-base-uncased')
+        '''
+            bos_token=sos_token,
+            eos_token=eos_token,
+            unk_token=unk_token,
+            pad_token=pad_token,
+            additional_special_tokens=speaker_name)
+        '''
+        for v in tok.vocab:
+            print(v.encode('utf-8').decode("utf-8") )
+        vocab = torchtext.vocab.Vocab(tok.vocab, min_freq=args['vocab_freq'], specials=[]) #
+        return tok, vocab
+    else:
+        tokenizers = {
+            'nltk': nltk.word_tokenize,
+            'nonword': re.compile(r'\W+').split,
+        }
+
+        return tokenizers[args['tokenizer'].lower()]
