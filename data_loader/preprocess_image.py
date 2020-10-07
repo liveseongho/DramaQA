@@ -14,6 +14,12 @@ image_types = ['full_image', 'person_full']
 image_size = [224, 224]
 delimiter = '/'
 
+modes = ['train', 'val', 'test']
+sos_token = '<sos>'
+eos_token = '<eos>'
+pad_token = '<pad>'
+unk_token = '<unk>'
+
 def dict_for_each_episode():
     return [dict() for i in range(18 + 1)]  # episode index: from 1 to 18
 
@@ -302,4 +308,97 @@ def extract_features(args, dataset, model):
     del dataloader
 
     return features
+
+
+def process_video(args, save_path, speaker_index, vocab):
+    pad_index = vocab.get_index(pad_token)
+    none_index = speaker_index['None']
+
+    print("saving processed_video ...")
+    features, visuals = preprocess_images(args)
+
+    """
+    {
+        full_image:   full_image (tensor of shape (512,)),
+        persons:      [[person1_id_idx, behavior1_idx, emotion1_idx], ...],
+        person_fulls: [person_full1 (tensor of shape (512,)), ... ]
+    }
+    """
+    full_images = features['full_image']
+    person_fulls = features['person_full']
+
+    new_visuals = defaultdict(dict)
+    for i in range(1, 19):
+        for key, value in visuals[i].items():
+            frame_id = value['frame_id']
+            scene_id = frame_id[:19]
+            vid = frame_id[:24]
+            f = get_frame_id(frame_id)
+
+
+            if scene_id in new_visuals:
+                if vid in new_visuals[scene_id]:
+                    new_visuals[scene_id][vid][f] = value
+                else:
+                    new_visuals[scene_id][vid] = defaultdict(dict)
+                    new_visuals[scene_id][vid][f] = value
+            else:
+                new_visuals[scene_id] = defaultdict(dict)
+                new_visuals[scene_id][vid] = defaultdict(dict)
+                new_visuals[scene_id][vid][f] = value
+    visuals = new_visuals
+
+    for scene_vid, vid_dict in full_images.items():
+        for vid, frames in vid_dict.items():
+            for key, value in frames.items():
+                frames[key] = {
+                    'full_image': value,
+                    'persons': [],
+                    'person_fulls': []
+                }
+                if vid not in visuals[scene_vid] or key not in visuals[scene_vid][vid]:
+                    continue
+
+                visual = visuals[scene_vid][vid][key]
+                processed_p = frames[key]['persons']
+
+                for person in visual["persons"]:
+                    person_id = person['person_id'].title()
+                    person_id_idx = none_index if person_id == '' else speaker_index[person_id]  # none -> None
+
+                    person_info = person['person_info']
+
+                    behavior = person_info['behavior'].lower()
+                    behavior_idx = pad_index if behavior == '' else vocab.get_index(behavior.split()[0])
+
+                    emotion = person_info['emotion'].lower()
+                    emotion_idx = pad_index if emotion == '' else vocab.get_index(emotion)
+
+                    processed = [person_id_idx, behavior_idx, emotion_idx] # Don't convert visual to a tensor yet
+                    processed_p.append(processed)
+
+                if processed_p:
+                    frames[key]['person_fulls'] = list(person_fulls[scene_vid][vid][key])
+
+    vids_list = list()
+    qa_paths = {m: Path(args['qa_path']) / 'AnotherMissOhQA_{}_set.json'.format(m) for m in modes}
+    qa_set = list()
+
+    for mode in modes:
+        qa_set.append(read_json(qa_paths[mode]))
+
+    for i, set_og in enumerate(qa_set):
+        vids_l = set()
+        for d in set_og:
+            vids_l.add(d['vid'][:-5])
+        vids_list.append(vids_l)
+
+    train_vids, val_vids, test_vids = vids_list
+    scene_vids = {'train': vids_list[0], 'val': vids_list[1], 'test': vids_list[2]}
+
+    full_images_by_modes = {mode: {k: full_images[k] for k in scene_vids[mode]} for mode in modes}
+    for mode in modes:
+        save_pickle(full_images_by_modes[mode], save_path[mode])
+
+
 
