@@ -1,10 +1,10 @@
 [<img src="figure/DramaQA_logo.png" width="300"/>](https://github.com/liveseongho/DramaQA/)
 
+[![DramaQA Homepage](https://img.shields.io/badge/homepage-DramaQA-blue)](https://dramaqa.snu.ac.kr)
 [![LICENSE](https://img.shields.io/github/license/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/blob/main/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/issues)
 [![GitHub stars](https://img.shields.io/github/stars/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/stargazers)
 [![Github forks](https://img.shields.io/github/forks/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/network/members)
-[![DramaQA Homepage](https://img.shields.io/badge/homepage-DramaQA-blue)](https://dramaqa.snu.ac.kr)
 
 DramaQA dataset is a large-scale video QA task based on a Korean popular TV show, `Another Miss Oh`. This dataset contains four levels of QA on difficulty and character-centered video annotations. We are expecting this dataset could be a starting point to evaluate human level video story understanding. Please refer more detailed information on [DramaQA homepage](https://dramaqa.snu.ac.kr).
 
@@ -12,7 +12,7 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 
 <!-- code_chunk_output -->
 
-* [DramaQA Starter Code](#DramaQA)
+* [DramaQA starter code](#DramaQA)
 	* [Requirements](#requirements)
 	* [Features](#features)
 	* [Folder Structure](#folder-structure)
@@ -28,6 +28,7 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 	* [Contribution](#contribution)
 	* [TODOs](#todos)
 	* [License](#license)
+	* [Contact information](#contact-information)
 	* [Acknowledgements](#acknowledgements)
 
 <!-- /code_chunk_output -->
@@ -221,3 +222,11 @@ If you need more visualizations, use `add_scalar('tag', data)`, `add_image('tag'
 
 ## License
 This project is licensed under the MIT License. See  LICENSE for more details
+
+## Contact information
+For help or issues using DramaQA starter code, please submit a GitHub issue.
+
+ Please feel free to contact official e-mail (dramaqa.challenge@gmail.com) if you have any questions about DramaQA challenge and dataset download. For personal communication related to DramaQA, please contact Seongho Choi (shchoi@bi.snu.ac.kr).
+
+## Acknowledgements
+This work was partly supported by the Institute for Information & Communications Technology Promotion (2015-0-00310-SW.StarLab, 2017-0-01772-VTT, 2018-0-00622-RMI, 2019-0-01367-BabyMind) and Korea Institute for Advancement Technology (P0006720-GENKO) grant funded by the Korea government.
