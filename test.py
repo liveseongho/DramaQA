@@ -7,7 +7,7 @@ import model.metric as module_metric
 import model.model as module_model
 from parse_config import ConfigParser
 from utils.util import batch_to_device
-import os, json 
+import os, json
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -189,7 +189,7 @@ def main(config):
                 else:
                     total_metrics[i] += metric(output, target, data['q_level_logic']) * batch_size
             '''
-                
+
 
     n_samples = len(data_loader.sampler)
     log = {'loss': total_loss / n_samples}

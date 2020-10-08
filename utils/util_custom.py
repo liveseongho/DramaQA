@@ -85,7 +85,6 @@ def pad_tensor(x, val=0):
     return storage
 
 
-
 def get_episode_id(vid):
     return int(vid[13:15]) # vid format: AnotherMissOh00_000_0000
 
