@@ -82,7 +82,7 @@ class MCM(BaseModel):
         self.character = nn.Parameter(torch.randn(22, D, dtype=torch.float), requires_grad=True)
 
     def forward(self, x):
-        B = x['que'].shape[0]
+        B = x['qa'].shape[0]
         #q, q_len = x['que'], x['que_l']
         qas, qas_l = x['qa'], x['qa_l']
         out_concat = []

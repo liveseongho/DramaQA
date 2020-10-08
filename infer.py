@@ -65,10 +65,9 @@ def main(config):
 
             _, preds = output.max(dim=1)
 
-
             for qid, pred_idx in zip(batch['qid'], preds):
                 answers[qid] = pred_idx.item()
-            ans_path = './answers.json'#config.resume.parent / 'answers.json'
+            ans_path = './answers.json'  #config.resume.parent / 'answers.json'
 
     with open(ans_path, 'w') as f:
         json.dump(answers, f, indent=4)

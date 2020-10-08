@@ -6,18 +6,17 @@ from datetime import datetime
 
 
 def batch_to_device(args, batch, device):
-    net_input_key = [*args]
-    net_input = {k: batch[k] for k in net_input_key}
-
-    for key, value in net_input.items():
+    #net_input_key = [*args]
+    #net_input = {k: batch[k] for k in net_input_key}
+    for key, value in batch.items():
         if torch.is_tensor(value):
-            net_input[key] = value.to(device).contiguous()
+            batch[key] = value.to(device).contiguous()
 
     ans_idx = batch.get('correct_idx', None)
     if torch.is_tensor(ans_idx):
         ans_idx = ans_idx.to(device).contiguous()
 
-    return net_input, ans_idx
+    return batch, ans_idx
 
 
 def get_now():
@@ -85,16 +84,80 @@ def pad_tensor(x, val=0):
     return storage
 
 
+def pad2d(data, pad_val, dtype, reshape3d=False, last_dim=0):
+    '''
+        data: list of sequence
+        return:
+            p_data: (batch_size, max_length_of_sequence)
+            p_length: (batch_size)
+    '''
+    batch_size = len(data)
+    length = [len(row) for row in data]
+    max_length = max(length)
+    shape = (batch_size, max_length)
+    p_length = torch.tensor(length, dtype=torch.long)  # no need to pad
+
+    if isinstance(pad_val, list):
+        p_data = torch.tensor(pad_val, dtype=dtype)
+        p_data = p_data.repeat(batch_size, max_length // len(pad_val))
+    else:
+        p_data = torch.full(shape, pad_val, dtype=dtype)
+
+    for i in range(batch_size):
+        d = torch.tensor(data[i], dtype=dtype)
+        p_data[i, :len(d)] = d
+
+    if reshape3d:
+        p_data = p_data.view(batch_size, -1, last_dim)
+        p_length = p_length / last_dim
+
+    return p_data, p_length
+
+
+def pad3d(data, pad_val, dtype, reshape4d=False, last_dim=0):
+    '''
+        data: list of list of sequence
+        return:
+            p_data: (batch_size, max_length_of_list_of_seq, max_length_of_sequence)
+            p_dim1_length: (batch_size)
+            p_dim2_length: (batch_size, max_length_of_list_of_seq)
+    '''
+    batch_size = len(data)
+    dim2_length = [[len(dim2) for dim2 in dim1] for dim1 in data]
+    max_dim1_length = max(len(dim1) for dim1 in data)
+    max_dim2_length = max(l for row in dim2_length for l in row)
+    data_shape = (batch_size, max_dim1_length, max_dim2_length)
+    p_dim2_length, p_dim1_length = pad2d(dim2_length, 0, torch.long)
+
+    if isinstance(pad_val, list):
+        p_data = torch.tensor(pad_val, dtype=dtype)
+        p_data = p_data.repeat(batch_size, max_dim1_length, max_dim2_length // len(pad_val))
+    else:
+        p_data = torch.full(data_shape, pad_val, dtype=dtype)
+
+    for i in range(batch_size):
+        row = data[i]
+        for j in range(len(row)):
+            d = torch.tensor(row[j], dtype=dtype)
+            p_data[i, j, :len(d)] = d
+
+    if reshape4d:
+        p_data = p_data.view(batch_size, max_dim1_length, -1, last_dim)
+        p_dim2_length = p_dim2_length / last_dim
+
+    return p_data, p_dim1_length, p_dim2_length
+
+
 def get_episode_id(vid):
-    return int(vid[13:15]) # vid format: AnotherMissOh00_000_0000
+    return int(vid[13:15])  # vid format: AnotherMissOh00_000_0000
 
 
 def get_scene_id(vid):
-    return int(vid[16:19]) # vid format: AnotherMissOh00_000_0000
+    return int(vid[16:19])  # vid format: AnotherMissOh00_000_0000
 
 
 def get_shot_id(vid):
-    return int(vid[20:24]) # vid format: AnotherMissOh00_000_0000
+    return int(vid[20:24])  # vid format: AnotherMissOh00_000_0000
 
 
 frame_id_re = re.compile('IMAGE_(\d+)')

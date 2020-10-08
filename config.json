@@ -74,6 +74,8 @@
             ],
             "script_type": "sentence",
             "visual_type": "shot",
+            "cc_spkr": false,
+            "cc_qa": true,
             "flatten": false
 
         }

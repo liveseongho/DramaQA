@@ -80,7 +80,7 @@ class Trainer(BaseTrainer):
 
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
-            log.update(**{'val_'+k : v for k, v in val_log.items()})
+            log.update(**{'val_'+ k : v for k, v in val_log.items()})
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
@@ -124,7 +124,7 @@ class Trainer(BaseTrainer):
         base = '[{}/{} ({:.0f}%)]'
         if hasattr(self.data_loader, 'n_samples'):
             total = self.data_loader.n_samples
-            current = min( (batch_idx+1) * self.data_loader.batch_size, total)
+            current = min((batch_idx + 1) * self.data_loader.batch_size, total)
         else:
             current = batch_idx
             total = self.len_epoch
