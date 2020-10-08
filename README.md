@@ -1,5 +1,7 @@
 <p align="center">
-<br>[<img src="figure/DramaQA_logo.png" width="400"/>](https://github.com/liveseongho/DramaQA/)<br>
+<br><img src="figure/DramaQA_logo.png" width="400"/><br>
+<p>
+<p align="center">
 [![LICENSE](https://img.shields.io/github/license/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/blob/main/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/issues)
 [![GitHub stars](https://img.shields.io/github/stars/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/stargazers)
