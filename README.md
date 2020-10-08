@@ -6,8 +6,8 @@
 [![GitHub issues](https://img.shields.io/github/issues/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/issues)
 [![GitHub stars](https://img.shields.io/github/stars/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/stargazers)
 [![Github forks](https://img.shields.io/github/forks/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/network/members)
-[![DramaQA Homepage](https://img.shields.io/badge/DramaQA-homepage-blue)](https://dramaqa.snu.ac.kr)
-[![GitHub last commit](https://img.shields.io//github/last-commit/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/tree/main)
+[![DramaQA Homepage](https://img.shields.io/badge/homepage-DramaQA-blue)](https://dramaqa.snu.ac.kr)
+
 <p>
 DramaQA dataset is a large-scale video QA task based on a Korean popular TV show, `Another Miss Oh`. This dataset contains four levels of QA on difficulty and character-centered video annotations. We are expecting this dataset could be a starting point to evaluate human level video story understanding. Please refer more detailed information on [DramaQA homepage](https://dramaqa.snu.ac.kr).
 
