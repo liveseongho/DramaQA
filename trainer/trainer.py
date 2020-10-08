@@ -60,11 +60,11 @@ class Trainer(BaseTrainer):
                 else:
                     self.train_metrics.update(met.__name__, *met(output, target, batch['q_level_logic']))
 
-            if batch_idx % self.log_step == 0 or batch_idx == self.len_epoch-1:
+            if batch_idx % self.log_step == 0 or batch_idx == self.len_epoch - 1:
                 tqdm_bar.set_description('Train Epoch: {} {} Loss: {:.6f}'.format(
-                     epoch,
-                     self._progress(batch_idx),
-                     loss.item()))
+                                         epoch,
+                                         self._progress(batch_idx),
+                                         loss.item()))
                 """
                 self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
                     epoch,
