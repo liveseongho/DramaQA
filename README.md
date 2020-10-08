@@ -1,6 +1,6 @@
 <p align="center">
 
-<br><img src="figure/DramaQA_logo.png" width="400"/><br>
+<br>[<img src="figure/DramaQA_logo.png" width="400"/>](https://github.com/liveseongho/DramaQA/)<br>
 
 [![LICENSE](https://img.shields.io/github/license/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/blob/main/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/issues)
