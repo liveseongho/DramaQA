@@ -1,14 +1,9 @@
-import os, re
-import json
+import re
 import numpy as np
-from pathlib import Path
 from unidecode import unidecode
 from .modules_language import Vocab
 from tqdm import tqdm
 from utils import read_json, write_json, save_pickle
-
-# debug
-from pprint import pprint
 
 empty_sub = '.'
 
@@ -19,7 +14,7 @@ unk_token = '<unk>'
 special_tokens = [sos_token, eos_token, pad_token, unk_token]
 
 speaker_name = [
-    'None', # index 0: unknown speaker
+    'None',  # index 0: unknown speaker
     'Anna', 'Chairman', 'Deogi', 'Dokyung', 'Gitae',
     'Haeyoung1', 'Haeyoung2', 'Heeran', 'Hun', 'Jeongsuk',
     'Jinsang', 'Jiya', 'Kyungsu', 'Sangseok', 'Seohee',
@@ -33,7 +28,6 @@ n_speakers = len(speaker_name)
 
 def load_subtitle(subtitle_path):
     subtitles = {}
-    speakers = {}
     subtitles = read_json(subtitle_path)
 
     for vid, v in subtitles.items():
@@ -173,13 +167,13 @@ def build_word_vocabulary(args, tokenizer, json_data_path, word_count_threshold=
     n_glove_words = len(word_counts)
     n_unk_words = n_all_words - n_glove_words
     print("The number of all unique words in %s data that uses GloVe embeddings: %d. "
-            '%.2f%% words are treated as %s or speaker names.'
-            % (modes_str, n_glove_words, 100 * n_unk_words / n_all_words, unk_token))
+          '%.2f%% words are treated as %s or speaker names.'
+          % (modes_str, n_glove_words, 100 * n_unk_words / n_all_words, unk_token))
 
     # Accept words whose occurence counts are greater or equal to the threshold.
     vocab = [w for w in word_counts if word_counts[w] >= word_count_threshold and w not in special_tokens]
     print("Vocabulary size %d (speakers and %s excluded) using word_count_threshold %d." %
-            (len(vocab), ' '.join(special_tokens), word_count_threshold))
+          (len(vocab), ' '.join(special_tokens), word_count_threshold))
 
     # Build index and vocabularies.
     print("Building word2idx, idx2word mapping.")
@@ -243,6 +237,7 @@ def build_word_vocabulary(args, tokenizer, json_data_path, word_count_threshold=
 
     return vocab
 
+
 def preprocess_text(vocab, tokenizer, json_data_path, save_path):
     print('Splitting long subtitles and converting words in text data to indices, timestamps from string to float.')
     word2idx = vocab.stoi
@@ -264,7 +259,7 @@ def preprocess_text(vocab, tokenizer, json_data_path, save_path):
                 for sub in subtitle['contained_subs']:
                     sub['et'] = float(sub['et'])
                     sub['st'] = float(sub['st'])
-                    sub['speaker'] = speaker_index[sub['speaker']] # to speaker index
+                    sub['speaker'] = speaker_index[sub['speaker']]  # to speaker index
                     split_subs = split_subtitle(sub, tokenizer, to_indices=True, word2idx=word2idx)
                     new_subs.extend(split_subs)
 
@@ -279,7 +274,6 @@ def preprocess_text(vocab, tokenizer, json_data_path, save_path):
     for mode in modes:
         save_pickle(texts[mode], save_path[mode])
 
-    #self.extract_val_ch_only(texts['val'])
     del texts
 
 
@@ -298,11 +292,12 @@ def load_glove(glove_path):
 
     return glove, embedding_dim
 
+
 def split_subtitle(sub, tokenizer, sos=True, eos=True, to_indices=False, word2idx=None):
-    if to_indices == True and word2idx == None:
+    if to_indices and word2idx is None:
         raise ValueError('word2idx should be given when to_indices is True')
 
-    n_special_tokens = sos + eos # True == 1, False == 0
+    n_special_tokens = sos + eos  # True == 1, False == 0
     st, et = sub['st'], sub['et']
     t_range = et - st
     speaker = sub['speaker']
@@ -316,7 +311,7 @@ def split_subtitle(sub, tokenizer, sos=True, eos=True, to_indices=False, word2id
 
         return [sub]
 
-    utters_len = np.array([len(u) - n_special_tokens for u in utters]) # -2 for <sos> and <eos>
+    utters_len = np.array([len(u) - n_special_tokens for u in utters])  # -2 for <sos> and <eos>
     ratio = utters_len.cumsum() / utters_len.sum()
     ets = st + ratio * t_range
     sts = [st] + list(ets[:-1])
@@ -330,8 +325,8 @@ def split_subtitle(sub, tokenizer, sos=True, eos=True, to_indices=False, word2id
 def split_string(string, tokenizer, min_sen_len=3, sos=True, eos=True):
     eos_re = re.compile(r'[\s]*[.?!]+[\s]*')
     split = eos_re.split(string)
-    split = list(filter(None, split)) # remove ''
-    split = [line_to_words(s, tokenizer, sos=sos, eos=eos) for s in split] # tokenize each split sentence
+    split = list(filter(None, split))  # remove ''
+    split = [line_to_words(s, tokenizer, sos=sos, eos=eos) for s in split]  # tokenize each split sentence
 
     # Merge short sentences to adjacent sentences
     n_special_tokens = sos + eos  # True == 1, False == 0
@@ -351,12 +346,12 @@ def split_string(string, tokenizer, min_sen_len=3, sos=True, eos=True):
                     #
                     # if sos == True (== 1), exclude <sos> from split[1] (split[i + 1][1:])
                     # else                 ,           just use split[1] (split[i + 1][0:])
-                    s = split[i][:len(split[i])-eos] + split[i + 1][sos:]
+                    s = split[i][:len(split[i]) - eos] + split[i + 1][sos:]
                     i += 1
 
                 no_short.append(s)
             else:
-                no_short[-1] = no_short[-1][:len(no_short[-1])-eos] + split[i][sos:]
+                no_short[-1] = no_short[-1][:len(no_short[-1]) - eos] + split[i][sos:]
         else:
             s = split[i]
             no_short.append(s)
@@ -367,7 +362,7 @@ def split_string(string, tokenizer, min_sen_len=3, sos=True, eos=True):
 
 
 def clean_string(string):
-    string = re.sub(r"[^A-Za-z0-9!?.]", " ", string) # remove all special characters except ! ? .
+    string = re.sub(r"[^A-Za-z0-9!?.]", " ", string)  # remove all special characters except ! ? .
     string = re.sub(r"\.{2,}", ".", string)
     string = re.sub(r"\s{2,}", " ", string)
 

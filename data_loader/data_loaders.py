@@ -5,11 +5,10 @@ from collections import defaultdict
 import torch
 
 from utils import *
-from .preprocess_script import merge_qa_subtitle, empty_sub, build_word_vocabulary, preprocess_text
-from .preprocess_image import preprocess_images, process_video
+from .preprocess_script import empty_sub, build_word_vocabulary, preprocess_text
+from .preprocess_image import process_video
 from .modules_language import get_tokenizer
 import os
-from tqdm import tqdm
 import numpy as np
 from pathlib import Path
 
@@ -63,7 +62,6 @@ class ImageData:
     def get_processed_video_path(self, image_path):
         return {m: Path(image_path) / 'cache' / ('processed_video_' + m + '.pickle') for m in modes}
 
-
     def get_bbft(self, vid, flatten=False):
         bb_features = []
         visual_graphs = []
@@ -83,9 +81,9 @@ class ImageData:
             vis_graph = []
 
             frame_num = 1
-            #if len(shot.keys()) > max_frame_per_shot:
+            # if len(shot.keys()) > max_frame_per_shot:
             #    np.random.uniform(0, len(shot.keys()), max_frame_per_shot)
-
+            # TODO: frame sampling
             for frame_id, frame in shot.items():
                 if frame_num > max_frame_per_shot:
                     break
@@ -125,10 +123,10 @@ class TextData:
                 self.preprocess_text(self.vocab, self.tokenizer, self.bert_data_path)
             self.data = load_pickle(self.bert_data_path[mode])
         else:
-            if os.path.isfile(self.vocab_path): # Use cached vocab if it exists.
+            if os.path.isfile(self.vocab_path):  # Use cached vocab if it exists.
                 print('Vocab exists!')
                 self.vocab = load_pickle(self.vocab_path)
-            else: # There is no cached vocab. Build vocabulary and preprocess text data
+            else:  # There is no cached vocab. Build vocabulary and preprocess text data
                 print('There is no cached vocab.')
                 self.tokenizer = get_tokenizer(args)
                 self.vocab = build_word_vocabulary(self.args, self.tokenizer, self.json_data_path)
@@ -212,7 +210,7 @@ class MultiModalData(Dataset):
         sub_in_sen_l = []   # list of subtitle sentences
         if self.args['script_type'] == 'sentence':
             max_sentence = self.args['max_sentence_per_scene']
-            if subtitle != empty_sub: # subtitle exists
+            if subtitle != empty_sub:  # subtitle exists
                 subs = subtitle["contained_subs"]
                 n_sentence = 1
 
@@ -230,24 +228,25 @@ class MultiModalData(Dataset):
                     sub_in_sen_l.append(utter)
 
             else: # No subtitle
-                spkr_of_sen_l.append(self.none_index) # add None speaker
-                sub_in_sen_l.append([self.pad_index]) # add <pad>
+                spkr_of_sen_l.append(self.none_index)  # add None speaker
+                sub_in_sen_l.append([self.pad_index])  # add <pad>
 
             data['sub_in_sen'] = sub_in_sen_l
             data['spkr_of_sen'] = spkr_of_sen_l
 
         elif self.args['script_type'] == 'word':
             # Concatenate subtitle sentences
-            sub_in_word_l = []; spkr_of_word_l = []
+            sub_in_word_l = []
+            spkr_of_word_l = []
             max_sub_len = self.max_sub_len
             n_words = 0
             for spkr, s in zip(spkr_of_sen_l, sub_in_sen_l):
                 sen_len = len(s)
-                #n_words += sen_len+1 #### tvqa
+                # n_words += sen_len+1 #### tvqa
 
                 sub_in_word_l.extend(s)
-                #sub_in_word_l.extend([spkr]) ### tvqa
-                spkr_of_word_l.extend(spkr for i in range(sen_len)) # 1:1 correspondence between word and speaker
+                # sub_in_word_l.extend([spkr]) ### tvqa
+                spkr_of_word_l.extend(spkr for i in range(sen_len))  # 1:1 correspondence between word and speaker
 
                 if n_words > max_sub_len:
                     del sub_in_word_l[max_sub_len:], spkr_of_word_l[max_sub_len:]
@@ -283,9 +282,9 @@ class MultiModalData(Dataset):
                 collected[key].append(value)
         que, que_l = self.pad2d(collected['que'], self.pad_index, int_dtype)
         ans, _, ans_l = self.pad3d(collected['ans'], self.pad_index, int_dtype)
-        qa_concat = [[collected['que'][j]+collected['ans'][j][i] for i in range(5)] for j in range(len(collected['que']))]
+        qa_concat = [[collected['que'][j] + collected['ans'][j][i] for i in range(5)] for j in range(len(collected['que']))]
         qa_concat, _, qa_concat_l = self.pad3d(qa_concat, self.pad_index, int_dtype)
-        correct_idx = torch.tensor(collected['correct_idx'], dtype=int_dtype) if self.mode != 'test' else None # correct_idx does not have to be padded
+        correct_idx = torch.tensor(collected['correct_idx'], dtype=int_dtype) if self.mode != 'test' else None
 
         data = {
             'que': que, 'que_l': que_l,
@@ -337,7 +336,7 @@ class MultiModalData(Dataset):
         length = [len(row) for row in data]
         max_length = max(length)
         shape = (batch_size, max_length)
-        p_length = torch.tensor(length, dtype=int_dtype) # no need to pad
+        p_length = torch.tensor(length, dtype=int_dtype)  # no need to pad
 
         if isinstance(pad_val, list):
             p_data = torch.tensor(pad_val, dtype=dtype)
@@ -351,7 +350,7 @@ class MultiModalData(Dataset):
 
         if reshape3d:
             p_data = p_data.view(batch_size, -1, last_dim)
-            p_length = p_length/last_dim
+            p_length = p_length / last_dim
 
         return p_data, p_length
 
@@ -377,7 +376,7 @@ class MultiModalData(Dataset):
 
         if reshape4d:
             p_data = p_data.view(batch_size, max_dim1_length, -1, last_dim)
-            p_dim2_length = p_dim2_length/last_dim
+            p_dim2_length = p_dim2_length / last_dim
 
         return p_data, p_dim1_length, p_dim2_length
 

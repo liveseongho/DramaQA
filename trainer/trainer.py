@@ -43,7 +43,7 @@ class Trainer(BaseTrainer):
 
         for batch_idx, batch in enumerate(tqdm_bar):
             data, target = batch_to_device(self.model_inputs, batch, self.device)
-            #data, target = data.to(self.device), target.to(self.device)
+            # data, target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
             output = self.model(data)
             loss = self.criterion(output, target)

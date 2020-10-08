@@ -5,6 +5,7 @@ import os
 import torch
 from torch.utils.data import Dataset
 
+
 class VisionDataset(Dataset):
     _repr_indent = 4
 

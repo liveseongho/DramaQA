@@ -60,7 +60,7 @@ class RNNMLP(BaseModel):
         self.bilstm_sub = RNNEncoder(300, 150, bidirectional=True, dropout_p=0, n_layers=1, rnn_type="lstm", return_hidden=False)
         self.bilstm_vis = RNNEncoder(512, 150, bidirectional=True, dropout_p=0, n_layers=1, rnn_type="lstm", return_hidden=False)
 
-        self.mlp = MLP(3*D, 1, [D, 100], 3)
+        self.mlp = MLP(3 * D, 1, [D, 100], 3)
 
     def forward(self, x):
 
@@ -73,10 +73,10 @@ class RNNMLP(BaseModel):
         e_qa = [mean_along_time(self.embedding(qa[i]), qa_l[i]) for i in range(5)]
 
         sub = self.embedding(sub)
-        sub,_ = self.bilstm_sub(sub,sub_l)
+        sub, _ = self.bilstm_sub(sub, sub_l)
         sub = mean_along_time(sub, sub_l)
 
-        vis, _ = self.bilstm_vis(vis, bbfts_l)
+        vis, _ = self.bilstm_vis(bbfts, bbfts_l)
         vis = mean_along_time(vis, bbfts_l)
 
         concat = torch.stack([torch.cat([e_qa[i], sub, vis], dim=1) for i in range(5)], dim=1)
@@ -124,7 +124,7 @@ class MemN2N(BaseModel):
         self.embedding = nn.Embedding(V, D).requires_grad_(False)
         self.memnet = MemNet()
         self.linear_sub = nn.Linear(D, D)
-        self.linear_vis = nn.Linear(3*D+512, D)
+        self.linear_vis = nn.Linear(3*D + 512, D)
 
     def sentence_embedding(self, story, story_l, story_l_l):
         story = story.view(-1, story.shape[2], story.shape[3])
@@ -134,15 +134,15 @@ class MemN2N(BaseModel):
         return story
 
     def get_score(self, e_s, e_q, e_a):
-        ga_1 = [torch.sum(e_s*e_a[i], dim=1).unsqueeze(1) for i in range (5)]
+        ga_1 = [torch.sum(e_s * e_a[i], dim=1).unsqueeze(1) for i in range (5)]
         ga_1 = F.softmax(torch.cat(ga_1, dim=1), dim=1)
 
         return ga_1
 
     def forward(self, x):
         q, q_l = x['que'], x['que_l']
-        a = [x['ans'].transpose(0,1)[i] for i in range(5)]
-        a_l = [x['ans_l'].transpose(0,1)[i] for i in range(5)]
+        a = [x['ans'].transpose(0, 1)[i] for i in range(5)]
+        a_l = [x['ans_l'].transpose(0, 1)[i] for i in range(5)]
         sub, sub_l, sub_l_l = x['sub'], x['sub_l'], x['sub_l_l']
         vmeta, vmeta_l = x['vmeta'], x['bbfts_l']
         bbfts, bbfts_l, bbfts_l_l = x['bbfts'], x['bbfts_l'], x['bbfts_l_l']

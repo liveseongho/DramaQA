@@ -1,7 +1,9 @@
 import numpy as np
 from transformers import BertTokenizer
 import torchtext
-import nltk, re
+import nltk
+import re
+
 
 # Refer to https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
 # for information about subclassing np.ndarray
@@ -17,7 +19,7 @@ class Vocab(np.ndarray):
         obj.specials = special_tokens
         obj.special_ids = [word2idx[token] for token in special_tokens]
         for token in special_tokens:
-            setattr(obj, token[1:-1], token) # vocab.sos = '<sos>' ...
+            setattr(obj, token[1:-1], token)  # vocab.sos = '<sos>' ...
 
         return obj
 
@@ -62,8 +64,8 @@ def get_tokenizer(args, special_tokens=None):
             additional_special_tokens=speaker_name)
         '''
         for v in tok.vocab:
-            print(v.encode('utf-8').decode("utf-8") )
-        vocab = torchtext.vocab.Vocab(tok.vocab, min_freq=args['vocab_freq'], specials=[]) #
+            print(v.encode('utf-8').decode("utf-8"))
+        vocab = torchtext.vocab.Vocab(tok.vocab, min_freq=args['vocab_freq'], specials=[])
         return tok, vocab
     else:
         tokenizers = {
