@@ -1,4 +1,4 @@
-<img src="figure/DramaQA_logo.png" width="200"/>
+[<img src="figure/DramaQA_logo.png" width="300"/>](https://github.com/liveseongho/DramaQA/)
 
 [![LICENSE](https://img.shields.io/github/license/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/blob/main/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/issues)
