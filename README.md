@@ -89,8 +89,8 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 
 ## Usage
 * Clone this repo `git clone https://github.com/liveseongho/DramaQA`.
-* Download DramaQA dataset [here](https://dramaqa.snu.ac.kr/Download) and make directory structure like (this)[#directory-structure].
-* Try `python train.py -c config.json` to run code. You need to install (requirements)[#requirements].
+* Download DramaQA dataset [here](https://dramaqa.snu.ac.kr/Download) and make directory structure like [this](#directory-structure).
+* Try `python train.py -c config.json` to run code. You need to install [requirements](#requirements).
 
 
 ### Resuming from checkpoints
