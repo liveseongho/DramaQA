@@ -18,7 +18,7 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 
 * [DramaQA starter code](#DramaQA)
 	* [Requirements](#requirements)
-	* [Folder Structure](#folder-structure)
+	* [Directory Structure](#directory-structure)
 	* [Usage](#usage)
 		* [Resuming from checkpoints](#resuming-from-checkpoints)
     * [Using Multiple GPU](#using-multiple-gpu)
@@ -39,7 +39,7 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 * PyTorch >= 1.4.0 (1.4.0 recommended)
 * tensorboard >= 1.14 (see [Tensorboard Visualization](#tensorboard-visualization))
 
-## Folder Structure
+## Directory Structure
   ```
   DramaQA/
   │
@@ -88,8 +88,9 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
   ```
 
 ## Usage
-* Download DramaQA dataset [here](https://dramaqa.snu.ac.kr/Download).
-* Try `python train.py -c config.json` to run code.
+* Clone this repo `git clone https://github.com/liveseongho/DramaQA`.
+* Download DramaQA dataset [here](https://dramaqa.snu.ac.kr/Download) and make directory structure like (this)[#directory-structure].
+* Try `python train.py -c config.json` to run code. You need to install (requirements)[#requirements].
 
 
 ### Resuming from checkpoints
