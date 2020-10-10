@@ -6,6 +6,8 @@
 [![GitHub stars](https://img.shields.io/github/stars/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/stargazers)
 [![Github forks](https://img.shields.io/github/forks/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/network/members)
 
+###### DramaQA dataset is currently in progress, and this repository will also be updated continuously.
+
 DramaQA dataset is a large-scale video QA task based on a Korean popular TV show, `Another Miss Oh`. This dataset contains four levels of QA on difficulty and character-centered video annotations. We are expecting this dataset could be a starting point to evaluate human level video story understanding. Please refer more detailed information on [DramaQA homepage](https://dramaqa.snu.ac.kr).
 
 <!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
@@ -14,7 +16,6 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 
 * [DramaQA starter code](#DramaQA)
 	* [Requirements](#requirements)
-	* [Features](#features)
 	* [Folder Structure](#folder-structure)
 	* [Usage](#usage)
 		* [Resuming from checkpoints](#resuming-from-checkpoints)
@@ -24,7 +25,6 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 		* [Additional logging](#additional-logging)
 		* [Checkpoints](#checkpoints)
     * [Tensorboard Visualization](#tensorboard-visualization)
-	* [Contribution](#contribution)
 	* [TODOs](#todos)
 	* [License](#license)
 	* [Contact information](#contact-information)
@@ -36,16 +36,6 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 * Python >= 3.6 (3.6 recommended)
 * PyTorch >= 1.4.0 (1.4.0 recommended)
 * tensorboard >= 1.14 (see [Tensorboard Visualization](#tensorboard-visualization))
-
-## Features
-<!-- * Clear folder structure which is suitable for many deep learning projects. -->
-* `.json` config file support for convenient parameter tuning.
-* Customizable command line options for more convenient parameter tuning.
-* Checkpoint saving and resuming.
-* Abstract base classes for faster development:
-  * `BaseTrainer` handles checkpoint saving/resuming, training process logging, and more.
-  * `BaseDataLoader` handles batch generation, data shuffling, and validation data splitting.
-  * `BaseModel` provides basic model summary.
 
 ## Folder Structure
   ```
@@ -83,7 +73,7 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
       └── ...
 
 
-  data/AnotherMissOh/ - default directory for storing input data
+  data/AnotherMissOh/ - default directory for storing dataset
   ├── AnotherMissOh_images/
   ├── AnotherMissOh_QA/
   │
@@ -122,9 +112,6 @@ Specify indices of available GPUs by cuda environmental variable.
 ## Customization
 
 ### Custom CLI options
-
-Changing values of config file is a clean, safe and easy way of tuning hyperparameters. However, sometimes
-it is better to have command line options if some values need to be changed too often or quickly.
 
 This template uses the configurations stored in the json file by default, but by registering custom options as follows
 you can change some of them using CLI flags.
@@ -216,7 +203,7 @@ If you need more visualizations, use `add_scalar('tag', data)`, `add_image('tag'
 This project is licensed under the MIT License. See [LICENSE](https://github.com/liveseongho/DramaQA/blob/main/LICENSE) for more details.
 
 ## Contact information
-For help or issues using DramaQA starter code, please submit a [GitHub issue](https://github.com/liveseongho/DramaQA/issues).
+For help or issues using DramaQA starter code, please submit a [GitHub issue](https://github.com/liveseongho/DramaQA/issues/new).
 
  Please feel free to contact official e-mail (dramaqa.challenge@gmail.com) if you have any questions about DramaQA challenge and dataset download. For personal communication related to DramaQA, please contact Seongho Choi (shchoi@bi.snu.ac.kr).
 
