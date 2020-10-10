@@ -177,7 +177,7 @@ A copy of config file will be saved in the same folder.
     'monitor_best': self.mnt_best,
     'config': self.config
   }
-  ```N
+  ```
 
 ### Tensorboard Visualization
 This template supports Tensorboard visualization by using either  `torch.utils.tensorboard` or [TensorboardX](https://github.com/lanpa/tensorboardX).
