@@ -1,10 +1,12 @@
 [<img src="figure/DramaQA_logo.png" width="300"/>](https://github.com/liveseongho/DramaQA/)
 
-[![DramaQA Homepage](https://img.shields.io/badge/homepage-DramaQA-blue)](https://dramaqa.snu.ac.kr)
-[![LICENSE](https://img.shields.io/github/license/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/blob/main/LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/issues)
+[![Last commit](https://img.shields.io/github/last-commit/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/commits/main)
+[![DramaQA Homepage](https://img.shields.io/badge/homepage-dramaqa.snu.ac.kr-blue)](https://dramaqa.snu.ac.kr)
+[![DramaQA Dataset](https://img.shields.io/badge/dataset-download-blue)](https://dramaqa.snu.ac.kr/Download)
 [![GitHub stars](https://img.shields.io/github/stars/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/stargazers)
 [![Github forks](https://img.shields.io/github/forks/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/issues)
+[![LICENSE](https://img.shields.io/github/license/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/blob/main/LICENSE)
 
 ##### DramaQA dataset is currently in progress, and this repository will also be updated continuously.
 
