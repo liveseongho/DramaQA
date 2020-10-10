@@ -22,7 +22,6 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 	* [Customization](#customization)
 		* [Custom CLI options](#custom-cli-options)
 		* [Additional logging](#additional-logging)
-		* [Validation data](#validation-data)
 		* [Checkpoints](#checkpoints)
     * [Tensorboard Visualization](#tensorboard-visualization)
 	* [Contribution](#contribution)
@@ -158,13 +157,6 @@ If you have additional information to be logged, in `_train_epoch()` of your tra
 ### Testing
 You can test trained model by running `test.py` passing path to the trained checkpoint by `--resume` argument.
 
-### Validation data
-To split validation data from a data loader, call `BaseDataLoader.split_validation()`, then it will return a data loader for validation of size specified in your config file.
-The `validation_split` can be a ratio of validation set per total data(0.0 <= float < 1.0), or the number of samples (0 <= int < `n_total_samples`).
-
-**Note**: the `split_validation()` method will modify the original data loader
-**Note**: `split_validation()` will return `None` if `"validation_split"` is set to `0`
-
 ### Checkpoints
 You can specify the name of the training session in config files:
   ```json
@@ -185,14 +177,14 @@ A copy of config file will be saved in the same folder.
     'monitor_best': self.mnt_best,
     'config': self.config
   }
-  ```
+  ```N
 
 ### Tensorboard Visualization
 This template supports Tensorboard visualization by using either  `torch.utils.tensorboard` or [TensorboardX](https://github.com/lanpa/tensorboardX).
 
 1. **Install**
 
-    If you are using pytorch 1.1 or higher, install tensorboard by 'pip install tensorboard>=1.14.0'.
+    If you are using pytorch 1.4.0 or higher, install tensorboard by 'pip install tensorboard>=1.14.0'.
 
     Otherwise, you should install tensorboardx. Follow installation guide in [TensorboardX](https://github.com/lanpa/tensorboardX).
 
@@ -221,10 +213,10 @@ If you need more visualizations, use `add_scalar('tag', data)`, `add_image('tag'
 - [x] Add BERT tokenizer
 
 ## License
-This project is licensed under the MIT License. See  LICENSE for more details
+This project is licensed under the MIT License. See [LICENSE](https://github.com/liveseongho/DramaQA/blob/main/LICENSE) for more details.
 
 ## Contact information
-For help or issues using DramaQA starter code, please submit a GitHub issue.
+For help or issues using DramaQA starter code, please submit a [GitHub issue](https://github.com/liveseongho/DramaQA/issues).
 
  Please feel free to contact official e-mail (dramaqa.challenge@gmail.com) if you have any questions about DramaQA challenge and dataset download. For personal communication related to DramaQA, please contact Seongho Choi (shchoi@bi.snu.ac.kr).
 
