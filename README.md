@@ -1,4 +1,4 @@
-[<img src="figure/DramaQA_logo.png" width="300"/>](https://github.com/liveseongho/DramaQA/)
+[<img src="figure/DramaQA_logo2.png" width="300"/>](https://github.com/liveseongho/DramaQA/)
 
 [![Last commit](https://img.shields.io/github/last-commit/liveseongho/DramaQA)](https://github.com/liveseongho/DramaQA/commits/main)
 [![DramaQA Homepage](https://img.shields.io/badge/homepage-dramaqa.snu.ac.kr-blue)](https://dramaqa.snu.ac.kr)
