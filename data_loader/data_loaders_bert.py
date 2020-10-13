@@ -8,7 +8,6 @@ from utils import *
 from .preprocess_script import empty_sub, build_word_vocabulary, preprocess_text
 from .preprocess_image import process_video
 from .modules_language import get_tokenizer
-from .data_loaders_bert import MultiModalData_BERT
 import os
 import numpy as np
 from pathlib import Path
@@ -53,25 +52,16 @@ class TextData:
         self.max_sen_len = args['max_word_per_sentence']
 
         # load vocab and preprocess dataset (words are converted into index)
-        if os.path.isfile(self.vocab_path):  # Use cached vocab if it exists.
-            print('Vocab exists!')
-            self.vocab = load_pickle(self.vocab_path)
-        else:  # There is no cached vocab. Build vocabulary and preprocess text data
-            print('There is no cached vocab.')
-            self.tokenizer, _ = get_tokenizer(args)
-            self.vocab = build_word_vocabulary(self.args, self.tokenizer, self.json_data_path)
-            if not self.args['remove_coreference']:
-                preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.pickle_data_path)
-            else:
-                preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.nc_data_path)
+        print('BERT mode ON')
+        self.bert_data_path = {m: self.get_data_path(args, mode=m, ext='_bert.pickle') for m in modes}
+
+        self.tokenizer, self.vocab = get_tokenizer(args)
+        if not os.path.isfile(self.bert_data_path[mode]):
+            self.preprocess_text(self.vocab, self.tokenizer, self.bert_data_path)
 
         # load data
-        if not self.args['remove_coreference']:
-            print("Loading processed dataset from path: %s." % self.pickle_data_path[mode])
-            self.data = load_pickle(self.pickle_data_path[mode])
-        else:
-            print("Loading processed dataset from path: %s." % self.nc_data_path[mode])
-            self.data = load_pickle(self.nc_data_path[mode])
+        print("Loading processed dataset from path: %s." % self.bert_data_path[mode])
+        self.data = load_pickle(self.bert_data_path[mode])
 
         ###### Special indices ######
         self.none_index = speaker_index['None']
@@ -183,7 +173,7 @@ class ImageData:
         return bb_features, visual_graphs
 
 
-class MultiModalData(Dataset):
+class MultiModalData_BERT(Dataset):
     def __init__(self, args, mode):
         assert mode in modes, "mode should be %s." % (' or '.join(modes))
 
@@ -339,15 +329,3 @@ class MultiModalData(Dataset):
         data['vmeta'] = vgraphs
 
         # currently not in the device yet
-        return data
-
-
-class DramaQADataLoader(BaseDataLoader):
-    def __init__(self, mode, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True, vocab=None, **kwargs):
-        if kwargs['bert']:
-            dataset = MultiModalData_BERT(kwargs, mode=mode)
-        else:
-            dataset = MultiModalData(kwargs, mode=mode)
-
-        self.vocab = dataset.vocab
-        super().__init__(dataset, batch_size, shuffle, validation_split, num_workers, dataset.collate_fn)

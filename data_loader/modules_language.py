@@ -3,6 +3,15 @@ from transformers import BertTokenizer
 import torchtext
 import nltk
 import re
+import itertools
+
+speaker_name = [
+    'None', # index 0: unknown speaker
+    'Anna', 'Chairman', 'Deogi', 'Dokyung', 'Gitae',
+    'Haeyoung1', 'Haeyoung2', 'Heeran', 'Hun', 'Jeongsuk',
+    'Jinsang', 'Jiya', 'Kyungsu', 'Sangseok', 'Seohee',
+    'Soontack', 'Sukyung', 'Sungjin', 'Taejin', 'Yijoon'
+]
 
 
 # Refer to https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
@@ -55,7 +64,7 @@ class Vocab(np.ndarray):
 
 def get_tokenizer(args, special_tokens=None):
     if args['bert']:
-        tok = BertTokenizer.from_pretrained('bert-base-uncased')
+        tok = BertTokenizer.from_pretrained('bert-base-cased')
         '''
             bos_token=sos_token,
             eos_token=eos_token,
@@ -63,8 +72,15 @@ def get_tokenizer(args, special_tokens=None):
             pad_token=pad_token,
             additional_special_tokens=speaker_name)
         '''
-        for v in tok.vocab:
-            print(v.encode('utf-8').decode("utf-8"))
+        for i, spk in enumerate(speaker_name):
+            tok.vocab[i] = spk
+            #print(tok.vocab[i])
+        print(tok.vocab[20])
+        for v in itertools.islice(tok.vocab, 100):
+            v = speaker_name[0]
+            print(v)
+        for v in itertools.islice(tok.vocab, 100):
+            print(v)
         vocab = torchtext.vocab.Vocab(tok.vocab, min_freq=args['vocab_freq'], specials=[])
         return tok, vocab
     else:
