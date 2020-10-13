@@ -48,15 +48,18 @@ class TextData:
         self.json_data_path = {m: self.get_data_path(args, mode=m, ext='.json') for m in modes}
         self.pickle_data_path = {m: self.get_data_path(args, mode=m, ext='.pickle') for m in modes}
         self.nc_data_path = {m: self.get_data_path(args, mode=m, ext='_nc.pickle') for m in modes}
-        self.bert_data_path = {m: self.get_data_path(args, mode=m, ext='_bert.pickle') for m in modes}
 
         self.max_sen_len = args['max_word_per_sentence']
 
         if args['bert']:
             print('BERT mode ON')
+            self.bert_data_path = {m: self.get_data_path(args, mode=m, ext='_bert.pickle') for m in modes}
+
             if not os.path.isfile(self.bert_data_path[mode]):
                 self.tokenizer, self.vocab = get_tokenizer(args, self.special_tokens)
                 self.preprocess_text(self.vocab, self.tokenizer, self.bert_data_path)
+
+            # load data
             print("Loading processed dataset from path: %s." % self.bert_data_path[mode])
             self.data = load_pickle(self.bert_data_path[mode])
         else:
@@ -66,7 +69,7 @@ class TextData:
                 self.vocab = load_pickle(self.vocab_path)
             else:  # There is no cached vocab. Build vocabulary and preprocess text data
                 print('There is no cached vocab.')
-                self.tokenizer = get_tokenizer(args)
+                self.tokenizer, _ = get_tokenizer(args)
                 self.vocab = build_word_vocabulary(self.args, self.tokenizer, self.json_data_path)
                 if not self.args['remove_coreference']:
                     preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.pickle_data_path)

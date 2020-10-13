@@ -73,4 +73,4 @@ def get_tokenizer(args, special_tokens=None):
             'nonword': re.compile(r'\W+').split,
         }
 
-        return tokenizers[args['tokenizer'].lower()]
+        return tokenizers[args['tokenizer'].lower()], None
