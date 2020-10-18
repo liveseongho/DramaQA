@@ -36,7 +36,7 @@
             "remove_metadata": false,
 
             "tokenizer": "nonword",
-            "bert": true,
+            "bert": false,
             "vocab_freq": 1,
             "lower": true,
             "save_cache": true,

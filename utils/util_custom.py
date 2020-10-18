@@ -6,11 +6,23 @@ from datetime import datetime
 
 
 def batch_to_device(args, batch, device):
-    #net_input_key = [*args]
-    #net_input = {k: batch[k] for k in net_input_key}
+    # net_input_key = [*args]
+    # net_input = {k: batch[k] for k in net_input_key}
     for key, value in batch.items():
         if torch.is_tensor(value):
             batch[key] = value.to(device).contiguous()
+        elif type(value) is dict:
+            for k, v in value.items():
+                batch[key][k] = torch.tensor(v, dtype=torch.long).to(device).contiguous()
+        elif type(value) is list:
+            if type(value[0]) is dict:
+                for i, data in enumerate(value):
+                    for k, v in data.items():
+                        batch[key][i][k] = torch.tensor(v, dtype=torch.long).to(device).contiguous()
+            elif len(value) == 5:
+                for i, data in enumerate(value):
+                    batch[key][i] = torch.tensor(data, dtype=torch.long).to(device).contiguous()
+
 
     ans_idx = batch.get('correct_idx', None)
     if torch.is_tensor(ans_idx):

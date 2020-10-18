@@ -48,7 +48,6 @@ def main(config):
     for d in data_set:
         text_data[d["qid"]] = d
 
-
     with torch.no_grad():
         tqdm_bar = tqdm(data_loader, desc='Test Epoch')
 

@@ -1,12 +1,10 @@
-from base import BaseDataLoader
-
 from collections import defaultdict
 
 import torch
 
 from utils import *
 from .preprocess_script import empty_sub, build_word_vocabulary, preprocess_text
-from .preprocess_image import process_video
+from .preprocess_image import preprocess_images
 from .modules_language import get_tokenizer
 import os
 import numpy as np
@@ -17,10 +15,10 @@ from torch.utils.data import Dataset
 # debug
 from pprint import pprint
 
-sos_token = '<sos>'
-eos_token = '<eos>'
-pad_token = '<pad>'
-unk_token = '<unk>'
+sos_token = '[SOS]'
+eos_token = '[EOS]'
+pad_token = '[PAD]'
+unk_token = '[UNK]'
 
 speaker_name = [
     'None', # index 0: unknown speaker
@@ -49,24 +47,27 @@ class TextData:
         self.pickle_data_path = {m: self.get_data_path(args, mode=m, ext='.pickle') for m in modes}
         self.nc_data_path = {m: self.get_data_path(args, mode=m, ext='_nc.pickle') for m in modes}
 
-        self.max_sen_len = args['max_word_per_sentence']
 
         # load vocab and preprocess dataset (words are converted into index)
         print('BERT mode ON')
+
         self.bert_data_path = {m: self.get_data_path(args, mode=m, ext='_bert.pickle') for m in modes}
 
         self.tokenizer, self.vocab = get_tokenizer(args)
+        '''
         if not os.path.isfile(self.bert_data_path[mode]):
-            self.preprocess_text(self.vocab, self.tokenizer, self.bert_data_path)
+            self.preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.bert_data_path)
 
         # load data
-        print("Loading processed dataset from path: %s." % self.bert_data_path[mode])
+        print("Loading dataset from path: %s." % self.bert_data_path[mode])
         self.data = load_pickle(self.bert_data_path[mode])
+        '''
+        self.data = read_json(self.json_data_path[mode])
 
         ###### Special indices ######
-        self.none_index = speaker_index['None']
-        self.pad_index = self.vocab.stoi.get(pad_token)
-        self.eos_index = self.vocab.stoi.get(eos_token)
+        self.none_index = self.vocab.get("None")
+        self.pad_index = self.vocab.get(pad_token)
+        self.eos_index = self.vocab.get(eos_token)
 
     def get_script(self, subtitle):
         spkr_of_sen_l = []  # list of speaker of subtitle sentences
@@ -81,21 +82,15 @@ class TextData:
                 if n_sentence > max_sentence:
                     break
                 n_sentence = n_sentence + 1
-                spkr = s["speaker"]
+                spkr = self.vocab.get(s["speaker"])
                 utter = s["utter"]
                 spkr_of_sen_l.append(spkr)
-                if len(utter) > self.max_sen_len:
-                    del utter[self.max_sen_len:]
-                    utter[-1] = self.eos_index
-                if self.args['cc_spkr']:
-                    utter = [spkr] + utter
                 sub_in_sen_l.append(utter)
         else:  # No subtitle
-            spkr_of_sen_l.append(self.none_index)  # add None speaker
-            sub_in_sen_l.append([self.pad_index])  # add <pad>
+            spkr_of_sen_l.append(self.vocab.get("None"))  # add None speaker
+            sub_in_sen_l.append(pad_token)  # add <pad>
 
         return spkr_of_sen_l, sub_in_sen_l
-
 
     def get_data_path(self, args, mode='train', ext='.json'):
         name = Path(args['data_path']).name.split('_')
@@ -113,8 +108,8 @@ class ImageData:
         args['device'] = torch.device('cuda:0')
 
         self.vocab = vocab
-        self.pad_index = vocab.get_index(pad_token)
-        self.none_index = speaker_index['None']
+        self.pad_index = vocab.get(pad_token)
+        self.none_index = vocab.get('None')
         self.visual_pad = [self.none_index, self.pad_index, self.pad_index]
 
         self.image_path = args['image_path']
@@ -122,13 +117,103 @@ class ImageData:
 
         self.processed_video_path = self.get_processed_video_path(self.image_path)
         if not os.path.isfile(self.processed_video_path[mode]):
-            process_video(args, self.processed_video_path, speaker_index, vocab)
+            self.process_video(args, self.processed_video_path, speaker_index, vocab)
 
         print("Loading processed video input from path: %s." % self.processed_video_path[mode])
         self.image_dt = load_pickle(self.processed_video_path[mode])
 
     def get_processed_video_path(self, image_path):
-        return {m: Path(image_path) / 'cache' / ('processed_video_' + m + '.pickle') for m in modes}
+        return {m: Path(image_path) / 'cache' / ('processed_video_bert_' + m + '.pickle') for m in modes}
+
+    def process_video(self, args, save_path, speaker_index, vocab):
+        pad_index = vocab.get(pad_token)
+        none_index = speaker_index['None']
+
+        print("saving processed_video ...")
+        features, visuals = preprocess_images(args)
+
+        """
+        {
+            full_image:   full_image (tensor of shape (512,)),
+            persons:      [[person1_id_idx, behavior1_idx, emotion1_idx], ...],
+            person_fulls: [person_full1 (tensor of shape (512,)), ... ]
+        }
+        """
+        full_images = features['full_image']
+        person_fulls = features['person_full']
+
+        new_visuals = defaultdict(dict)
+        for i in range(1, 19):
+            for key, value in visuals[i].items():
+                frame_id = value['frame_id']
+                scene_id = frame_id[:19]
+                vid = frame_id[:24]
+                f = get_frame_id(frame_id)
+
+
+                if scene_id in new_visuals:
+                    if vid in new_visuals[scene_id]:
+                        new_visuals[scene_id][vid][f] = value
+                    else:
+                        new_visuals[scene_id][vid] = defaultdict(dict)
+                        new_visuals[scene_id][vid][f] = value
+                else:
+                    new_visuals[scene_id] = defaultdict(dict)
+                    new_visuals[scene_id][vid] = defaultdict(dict)
+                    new_visuals[scene_id][vid][f] = value
+        visuals = new_visuals
+
+        for scene_vid, vid_dict in full_images.items():
+            for vid, frames in vid_dict.items():
+                for key, value in frames.items():
+                    frames[key] = {
+                        'full_image': value,
+                        'persons': [],
+                        'person_fulls': []
+                    }
+                    if vid not in visuals[scene_vid] or key not in visuals[scene_vid][vid]:
+                        continue
+
+                    visual = visuals[scene_vid][vid][key]
+                    processed_p = frames[key]['persons']
+
+                    for person in visual["persons"]:
+                        person_id = person['person_id'].title()
+                        person_id_idx = none_index if person_id == '' else speaker_index[person_id]  # none -> None
+
+                        person_info = person['person_info']
+
+                        behavior = person_info['behavior'].lower()
+                        behavior_idx = pad_index if behavior == '' else vocab.get(behavior.split()[0])
+
+                        emotion = person_info['emotion'].lower()
+                        emotion_idx = pad_index if emotion == '' else vocab.get(emotion)
+
+                        processed = [person_id_idx, behavior_idx, emotion_idx] # Don't convert visual to a tensor yet
+                        processed_p.append(processed)
+
+                    if processed_p:
+                        frames[key]['person_fulls'] = list(person_fulls[scene_vid][vid][key])
+
+        vids_list = list()
+        qa_paths = {m: Path(args['qa_path']) / 'AnotherMissOhQA_{}_set.json'.format(m) for m in modes}
+        qa_set = list()
+
+        for mode in modes:
+            qa_set.append(read_json(qa_paths[mode]))
+
+        for i, set_og in enumerate(qa_set):
+            vids_l = set()
+            for d in set_og:
+                vids_l.add(d['vid'][:-5])
+            vids_list.append(vids_l)
+
+        train_vids, val_vids, test_vids = vids_list
+        scene_vids = {'train': vids_list[0], 'val': vids_list[1], 'test': vids_list[2]}
+
+        full_images_by_modes = {mode: {k: full_images[k] for k in scene_vids[mode]} for mode in modes}
+        for mode in modes:
+            save_pickle(full_images_by_modes[mode], save_path[mode])
 
     def get_bbft(self, vid, flatten=False):
         bb_features = []
@@ -183,6 +268,7 @@ class MultiModalData_BERT(Dataset):
         ###### Text ######
         text_data = TextData(args, mode)
         self.text = text_data.data
+        self.tokenizer = text_data.tokenizer
         self.get_script = text_data.get_script
         self.vocab = text_data.vocab
 
@@ -194,11 +280,12 @@ class MultiModalData_BERT(Dataset):
         ###### Constraints ######
         self.max_sub_len = args['max_sub_len']
         self.max_image_len = args['max_image_len']
+        self.max_sen_len = args['max_word_per_sentence']
 
         ###### Special indices ######
         self.none_index = speaker_index['None']
-        self.pad_index = self.vocab.stoi.get(pad_token)
-        self.eos_index = self.vocab.stoi.get(eos_token)
+        self.pad_index = self.vocab.get(pad_token)
+        self.eos_index = self.vocab.get(eos_token)
 
         self.inputs = args['inputs']
 
@@ -225,55 +312,78 @@ class MultiModalData_BERT(Dataset):
             'qid': qid
         }
 
-        script_types = ['sentence', 'word']
+        script_types = ['sentence']
         assert self.args['script_type'] in script_types, "scrtip_type should be %s." % (' or '.join(script_types))
 
         spkr, script = self.get_script(subtitle)
 
-        if self.args['script_type'] == 'word':
-            # Concatenate subtitle sentences
-            sub_in_word_l = []
-            spkr_of_word_l = []
-            max_sub_len = self.max_sub_len
-            n_words = 0
-            for spkr, s in zip(spkr, script):
-                sen_len = len(s)
-
-                n_words += sen_len
-                sub_in_word_l.extend([spkr])
-
-                sub_in_word_l.extend(s)
-                spkr_of_word_l.extend(spkr for i in range(sen_len))  # 1:1 correspondence between word and speaker
-
-                if n_words > max_sub_len:
-                    del sub_in_word_l[max_sub_len:], spkr_of_word_l[max_sub_len:]
-                    sub_in_word_l[-1] = self.eos_index
-
-                    break
-            script = sub_in_word_l
-            spkr = spkr_of_word_l
-            # spkr = np.concatenate(spkr, axis=0)
-            # script = np.concatenate(script, axis=0)
-
         data['spkr'] = spkr
         data['script'] = script
 
-        visual_types = ['shot', 'frame']
+        visual_types = ['shot']
         assert self.args['visual_type'] in visual_types, "visual_typoe should be %s." % (' or '.join(visual_types))
 
         vfeatures, vmetas = self.image.get_bbft(vid)
-
-        if self.args['visual_type'] == 'frame':
-            # vfeatures: [(num_frames*512), (num_frames*512), ...]
-            # vmetas: [(num_frames*3*512), ...]
-            vfeatures = np.concatenate(vfeatures, axis=0)
-            vmetas = np.concatenate(vmetas, axis=0)
 
         data['bbfts'] = vfeatures
         data['vgraphs'] = vmetas
 
         # currently not tensor yet
         return data
+
+    def bs2bi(self, batch_sentences):
+        batch_size = len(batch_sentences)
+        T1 = [len(batch_sentences[i]) for i in range(batch_size)]
+        T_max = max(T1)
+        sentences = []
+
+        for i in range(batch_size):
+            if len(batch_sentences[i]) < T_max:
+                batch_sentences[i].extend([pad_token] * (T_max-len(batch_sentences[i])))
+
+            sentences.extend(batch_sentences[i])
+
+        o = self.tokenizer(sentences, padding=True, truncation=True, max_length=self.max_sen_len)
+
+        o = {k: [v[T_max*i:T_max*(i+1)] for i in range(batch_size)] for k, v in o.items()}
+
+        max_l_l = [[sum(o['attention_mask'][i][j]) for j in range(T_max)] for i in range(batch_size)]
+
+        for k, v in o.items():
+            o[k] = [[sent[:max(max_l_l)] for sent in batch] for batch in v]
+
+        # max_l = [max(max_l_l[i]) for i in range(batch_size)]
+        return o, torch.tensor(T1), torch.tensor(max_l_l)
+
+    def bs2bi(self, batch_sentences):
+        batch_size = len(batch_sentences)
+        T1 = [len(batch_sentences[i]) for i in range(batch_size)]
+        T_max = max(T1)
+        sentences = []
+
+        for i in range(batch_size):
+            if len(batch_sentences[i]) < T_max:
+                batch_sentences[i].extend([pad_token] * (T_max-len(batch_sentences[i])))
+
+            sentences.extend(batch_sentences[i])
+
+        o = self.tokenizer(sentences, padding=True, truncation=True, max_length=self.max_sen_len)
+
+        o = {k: [v[T_max*i:T_max*(i+1)] for i in range(batch_size)] for k, v in o.items()}
+
+        max_l_l = [[sum(o['attention_mask'][i][j]) for j in range(T_max)] for i in range(batch_size)]
+
+        # max_l = [max(max_l_l[i]) for i in range(batch_size)]
+        return o, torch.tensor(T1), torch.tensor(max_l_l)
+
+    def bs2bi2d(self, batch_sentences):
+        batch_size = len(batch_sentences)
+
+        o = self.tokenizer(batch_sentences, padding=True, truncation=True, max_length=self.max_sen_len)
+        max_l = [sum(o['attention_mask'][i]) for i in range(batch_size)]
+        o = {k: v for k, v in o.items()}
+        # max_l = [max(max_l_l[i]) for i in range(batch_size)]
+        return o, torch.tensor(max_l)
 
     # data padding
     def collate_fn(self, batch):
@@ -290,9 +400,15 @@ class MultiModalData_BERT(Dataset):
         }
 
         if self.args['cc_qa']:
-            qa_concat = [[collected['que'][j] + collected['ans'][j][i] for i in range(5)] for j in range(len(collected['que']))]
-            qa_concat, _, qa_concat_l = pad3d(qa_concat, self.pad_index, int_dtype)
-            data['qa'] = qa_concat
+            qa_concat = [[collected['que'][j] + ' ' + collected['ans'][j][i] for j in range(len(collected['que']))] for i in range(5)]
+            qa_concat_dict, max_l, qa_concat_l = [], [], []
+            for i in range(5):
+                input1, input2 = self.bs2bi2d(qa_concat[i])
+                qa_concat_dict.append(input1)
+                qa_concat_l.append(input2)
+
+            #qa_concat, _, qa_concat_l = pad3d(qa_concat, self.pad_index, int_dtype)
+            data['qa'] = qa_concat_dict
             data['qa_l'] = qa_concat_l
         else:
             que, que_l = pad2d(collected['que'], self.pad_index, int_dtype)
@@ -308,7 +424,8 @@ class MultiModalData_BERT(Dataset):
             sub_l_l = None
         elif self.args['script_type'] == 'sentence':
             spkr, spkr_l = pad2d(collected['spkr'], self.none_index, int_dtype)
-            sub, sub_l, sub_l_l = pad3d(collected['script'], self.pad_index, int_dtype)
+            # sub, sub_l, sub_l_l = pad3d(collected['script'], self.pad_index, int_dtype)
+            sub, sub_l, sub_l_l = self.bs2bi(collected['script'])
 
         data['spkr'] = spkr
         data['sub'] = sub
@@ -329,3 +446,4 @@ class MultiModalData_BERT(Dataset):
         data['vmeta'] = vgraphs
 
         # currently not in the device yet
+        return data

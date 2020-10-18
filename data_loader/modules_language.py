@@ -73,16 +73,12 @@ def get_tokenizer(args, special_tokens=None):
             additional_special_tokens=speaker_name)
         '''
         for i, spk in enumerate(speaker_name):
-            tok.vocab[i] = spk
-            #print(tok.vocab[i])
-        print(tok.vocab[20])
-        for v in itertools.islice(tok.vocab, 100):
-            v = speaker_name[0]
-            print(v)
-        for v in itertools.islice(tok.vocab, 100):
-            print(v)
-        vocab = torchtext.vocab.Vocab(tok.vocab, min_freq=args['vocab_freq'], specials=[])
-        return tok, vocab
+            if spk not in tok.vocab.keys():
+                tok.vocab.pop('[unused{}]'.format(i+1))
+                tok.vocab[spk] = i+1
+        print("Added main characters in BERT tokenizer.")
+
+        return tok, tok.vocab
     else:
         tokenizers = {
             'nltk': nltk.word_tokenize,

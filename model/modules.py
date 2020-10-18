@@ -12,7 +12,7 @@ class ContextMatching(nn.Module):
     def __init__(self, channel_size):
         super(ContextMatching, self).__init__()
 
-        self.mlp = nn.Linear(channel_size * 2, 1, bias=False)
+        self.mlp = nn.Linear(channel_size, 1, bias=False)
 
     @classmethod
     def get_u_tile(cls, s, s2):
@@ -25,9 +25,11 @@ class ContextMatching(nn.Module):
     def forward(self, s1, l1, s2, l2, mask2d=False):
         t1 = s1.size(1)
         t2 = s2.size(1)
+        #print(s1.shape, l1.shape, s2.shape, l2.shape)
         repeat_s1 = s1.unsqueeze(2).repeat(1, 1, t2, 1)  # [B, T1, T2, D]
         repeat_s2 = s2.unsqueeze(1).repeat(1, t1, 1, 1)  # [B, T1, T2, D]
         packed_s1_s2 = torch.cat([repeat_s1, repeat_s2], dim=3)  # [B, T1, T2, D*3]
+        #print(packed_s1_s2.shape)
         s = self.mlp(packed_s1_s2).squeeze(dim=3)  # s is the similarity matrix from biDAF paper. [B, T1, T2]
         '''
         s = torch.bmm(s1, s2.transpose(1, 2))
