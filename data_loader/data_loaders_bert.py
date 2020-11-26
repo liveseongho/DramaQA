@@ -184,10 +184,10 @@ class ImageData:
                         person_info = person['person_info']
 
                         behavior = person_info['behavior'].lower()
-                        behavior_idx = pad_index if behavior == '' else vocab.get(behavior.split()[0])
+                        behavior_idx = pad_index if behavior == '' or behavior is None else vocab.get(behavior.split()[0])
 
                         emotion = person_info['emotion'].lower()
-                        emotion_idx = pad_index if emotion == '' else vocab.get(emotion)
+                        emotion_idx = pad_index if emotion == '' or emotion is None else vocab.get(emotion)
 
                         processed = [person_id_idx, behavior_idx, emotion_idx] # Don't convert visual to a tensor yet
                         processed_p.append(processed)

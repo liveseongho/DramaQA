@@ -1,7 +1,7 @@
 {
     "name": "AAAI2021",
     "n_gpu": 1,
-    "seed": 123,
+    "seed": 1234,
 
     "model": {
         "type": "MCM",
@@ -25,7 +25,7 @@
     "data_loader": {
         "type": "DramaQADataLoader",
         "args":{
-            "batch_size": 4,
+            "batch_size": 16,
             "shuffle": true,
             "num_workers": 0,
 

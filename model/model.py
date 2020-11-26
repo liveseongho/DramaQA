@@ -41,13 +41,13 @@ class MCM(BaseModel):
         #self.cf_qa = nn.Sequential(nn.Linear(D, clf_dim), nn.Softmax(dim=2))
         #self.final_clf = nn.Linear(clf_dim, 1)
 
-        if not kwargs['remove_coreference']:
+        if not self.remove_coreference:
             self.bilstm_subs = RNNEncoder(321, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
         else:
             self.bilstm_subs = RNNEncoder(300, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
         if self.opts['subs_low'] or self.opts['subs_high']:
             self.cmat_subs = ContextMatching(2*D)
-            if not kwargs['remove_coreference']:
+            if not self.remove_coreference:
                 self.conv_pool_subs = Conv1d(D*3+2, D*2)
             else:
                 self.conv_pool_subs = Conv1d(D*3+1, D*2)
@@ -60,13 +60,13 @@ class MCM(BaseModel):
             self.clf_subs_high = nn.Sequential(nn.Linear(D*2, 1), nn.Softmax(dim=1))
         '''
 
-        if not kwargs['remove_metadata']:
-            self.bilstm_bbfts = RNNEncoder(visual_dim+D*2+21, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
+        if not self.remove_metadata:
+            self.bilstm_bbfts = RNNEncoder(D*2+21, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
         else:
             self.bilstm_bbfts = RNNEncoder(visual_dim, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
         if self.opts['visual_low'] or self.opts['visual_high']:
             self.cmat_bbfts = ContextMatching(2*D)
-            if not kwargs['remove_metadata']:
+            if not self.remove_metadata:
                 self.conv_pool_bbfts = Conv1d(D*3+1, D*2)
             else:
                 self.conv_pool_bbfts = Conv1d(D*3, D*2)
@@ -191,7 +191,8 @@ class MCM(BaseModel):
             vgraphs_be = vgraphs[:, :, :, 1:3].contiguous()
             vgraphs_be = self.embedding(vgraphs_be.view(B, -1)).view(B, N_scene, N_shot, -1)
 
-            vgraphs_full = torch.cat([bbfts, vgraphs_be, vgraphs_p_onehot], dim=3)
+            #vgraphs_full = torch.cat([bbfts, vgraphs_be, vgraphs_p_onehot], dim=3)
+            vgraphs_full = torch.cat([vgraphs_be, vgraphs_p_onehot], dim=3)
 
             vgraphs_p_onehot = vgraphs_p_onehot.reshape(B, -1, 21)
             vis_flag = [torch.matmul(vgraphs_p_onehot, concat_qa[i].unsqueeze(2)) for i in range(5)]
@@ -356,7 +357,6 @@ class MCM(BaseModel):
             out_mask = out_mask.unsqueeze(3).repeat(1,1,1,n_dims)
 
         return out.masked_fill_(out_mask, 0)
-
 
     def get_name(self, x, x_l):
         x_mask = x.masked_fill(x>20, 21)

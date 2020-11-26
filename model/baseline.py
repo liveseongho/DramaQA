@@ -6,6 +6,7 @@ from torch.autograd import Variable
 
 from . mlp import MLP
 from . rnn import RNNEncoder, mean_along_time
+from transformers import BertConfig, BertModel
 
 
 class DotProdSim(BaseModel):
@@ -48,6 +49,43 @@ class ShortestAnswer(BaseModel):
         al = 1/x['ans_len']
 
         return al
+
+
+class QABert(BaseModel):
+    def __init__(self, pt_emb, **kwargs):
+        super().__init__()
+        D = kwargs["n_dim"]  # pt_emb.shape[1]
+
+        self.sent_embedder = BertModel.from_pretrained('bert-base-cased')
+        for param in self.sent_embedder.parameters():
+            param.requires_grad = True
+        self.distil2imsize = nn.Linear(768, D)
+        self.dim_reduce = nn.Linear(768, 300)
+        self.get_score = MLP(300, 1, [100], 2)
+
+    def bert_encoder(self, sentence_dict, dict_l):
+        B = sentence_dict['input_ids'].shape[0]
+        T1 = sentence_dict['input_ids'].shape[1]
+        for k, v in sentence_dict.items():
+            sentence_dict[k] = v.view(-1, v.shape[-1])
+        input_ids = sentence_dict['input_ids']
+        attention_mask = sentence_dict['attention_mask']
+        token_type_ids = sentence_dict['token_type_ids']
+        o = self.sent_embedder(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)[0]
+        o = mean_along_time(self.dim_reduce(o.view(B, T1, o.shape[-1])), dict_l)
+        return o
+
+    def forward(self, x):
+        # cls token, fine-tuning
+        qas_dict, qas_l = x['qa'], x['qa_l']
+        B = qas_dict[0]['input_ids'].shape[0]
+        e_qas = [self.bert_encoder(qas_d, qas_l[i]) for i, qas_d in enumerate(qas_dict)]
+
+        #e_qas = [self.get_score(torch.mean(emb, dim=1)) for emb in e_qas]
+        e_qas = [self.get_score(emb) for emb in e_qas]
+        e_qas = torch.stack(e_qas, 0).transpose(0, 1).squeeze()
+
+        return e_qas.view (B, -1)
 
 
 class RNNMLP(BaseModel):

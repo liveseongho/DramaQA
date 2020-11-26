@@ -150,6 +150,13 @@ def pad3d(data, pad_val, dtype, reshape4d=False, last_dim=0):
     for i in range(batch_size):
         row = data[i]
         for j in range(len(row)):
+            if None in row[j]:
+
+                for idx, d in enumerate(row[j]):
+                    if d is None:
+                        row[j][idx] = 0
+                row[j] = row[j].astype(np.int64)
+
             d = torch.tensor(row[j], dtype=dtype)
             p_data[i, j, :len(d)] = d
 

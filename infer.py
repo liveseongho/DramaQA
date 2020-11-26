@@ -11,7 +11,7 @@ import model.model as module_model
 #import model_tvqa.tvqa_abc as module_model
 #import model.baseline as module_model
 from parse_config import ConfigParser
-from utils.util import batch_to_device
+from utils.util_custom import batch_to_device
 import model.baseline as module_baseline
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -74,7 +74,7 @@ def main(config):
     print("Saved answers at {}".format(ans_path))
 
     hypo = answers
-    gt = open_data("data/AnotherMissOh/AnotherMissOh_QA/AnotherMissOhQA_test_with_gt.json")
+    gt = open_data("/data/dataset/AnotherMissOh/AnotherMissOh_QA/AnotherMissOhQA_test_with_gt.json")
 
     hypo_keys = set(hypo.keys())
     gt_keys = set(gt.keys())

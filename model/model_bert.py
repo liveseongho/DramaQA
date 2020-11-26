@@ -430,6 +430,18 @@ class MCM(BaseModel):
         x_sum = torch.sum(x_onehot[:,:,:21], dim=1)
         return x_sum > 0
 
+    def get_name2(self, x, x_l):
+        mask_ = x.data.new(*x.size()).fill_(0).bool()
+        for spk_i in self.spk_indexes:
+            mask_ = mask_ + (x == spk_i)
+
+        x_mask = x.masked_fill(mask_==False, 7330)  # 7330 is None index
+
+        self.change_index(x_mask)
+
+        x_onehot = self._to_one_hot(x_mask, 22, x_l)
+        x_sum = torch.sum(x_onehot[:,:,1:22], dim=1)
+        return x_sum > 0
 
 class Conv1d(nn.Module):
     def __init__(self, n_dim, out_dim):

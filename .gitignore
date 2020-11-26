@@ -3,3 +3,4 @@ __pycache__
 results
 model_tvqa
 _bert
+score.py
