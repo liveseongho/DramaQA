@@ -40,25 +40,37 @@ class Trainer(BaseTrainer):
         self.model.train()
         self.train_metrics.reset()
         tqdm_bar = tqdm(self.data_loader, desc='Train Epoch : {}'.format(epoch))
-
+        
         for batch_idx, batch in enumerate(tqdm_bar):
             data, target = batch_to_device(self.model_inputs, batch, self.device)
             # data, target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
             output = self.model(data)
-            loss = self.criterion(output, target)
+
+            # Comment(Donggeon, 20201119): changing target for open_ended
+            target = data['ans']
+            loss = 0
+            pred = []
+            target = target.transpose(0, 1)
+            for di in range(len(target)):
+                loss += self.criterion(output[di] ,target[di])
+                topv, topi = output[di].topk(1)
+                pred.append(topi.item())
+            pred = torch.tensor(pred)
+            target = target.transpose(0, 1)
+            target = target.squeeze(0)
 
             loss.backward()
             self.optimizer.step()
-
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())
-
+            
+            
             for met in self.metric_ftns:
-                if 'accuracy_diff' not in met.__name__:
-                    self.train_metrics.update(met.__name__, met(output, target))
-                else:
+                if 'accuracy_diff' in met.__name__:
                     self.train_metrics.update(met.__name__, *met(output, target, batch['q_level_logic']))
+                else:
+                    self.train_metrics.update(met.__name__, met(pred, target, self.model.vocab))
 
             if batch_idx % self.log_step == 0 or batch_idx == self.len_epoch - 1:
                 tqdm_bar.set_description('Train Epoch: {} {} Loss: {:.6f}'.format(
@@ -97,20 +109,31 @@ class Trainer(BaseTrainer):
         self.valid_metrics.reset()
         with torch.no_grad():
             tqdm_bar = tqdm(self.valid_data_loader, desc='Valid Epoch: {}'.format(epoch))
-
             for batch_idx, batch in enumerate(tqdm_bar):
                 data, target = batch_to_device(self.model_inputs, batch, self.device)
-
                 output = self.model(data)
-                loss = self.criterion(output, target)
-
+    
+                # Comment(Donggeon, 20201119): changing target for open_ended
+                target = data['ans']
+                loss = 0
+                pred = []
+                target = target.transpose(0, 1)
+                for di in range(len(target)):
+                    loss += self.criterion(output[di] ,target[di])
+                    topv, topi = output[di].topk(1)
+                    pred.append(topi.item())
+                pred = torch.tensor(pred)
+                target = target.transpose(0, 1)
+                target = target.squeeze(0)
+    
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
                 self.valid_metrics.update('loss', loss.item())
                 for met in self.metric_ftns:
-                    if 'accuracy_diff' not in met.__name__:
-                        self.valid_metrics.update(met.__name__, met(output, target))
-                    else:
+                    if 'accuracy_diff' in met.__name__:
                         self.valid_metrics.update(met.__name__, *met(output, target, batch['q_level_logic']))
+                    else:
+                        self.valid_metrics.update(met.__name__, met(pred, target, self.model.vocab))
+    
 
                 #self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 

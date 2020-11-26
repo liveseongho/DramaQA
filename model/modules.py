@@ -34,7 +34,7 @@ class ContextMatching(nn.Module):
         '''
 
         if not mask2d:
-            s_mask = s.data.new(*s.size()).fill_(1).bool()  # [B, T1, T2]
+            s_mask = s.data.new(*s.size()).fill_(1)  # [B, T1, T2]
             # Init similarity mask using lengths
             for i, (l_1, l_2) in enumerate(zip(l1, l2)):
                 s_mask[i][:l_1, :l_2] = 0

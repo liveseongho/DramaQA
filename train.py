@@ -7,11 +7,13 @@ import torch
 import numpy as np
 import data_loader.data_loaders as module_data
 import model.loss as module_loss
-import model.metric as module_metric
+# import model.metric as module_metric
+import model.metric_open_ended as module_metric
 # import model.mdam as module_model
 # import model_tvqa.tvqa_abc as module_model
-import model.model as module_model
+# import model.model as module_model
 # import model.baseline as module_model
+import model.model_open_ended as module_model
 from parse_config import ConfigParser
 from trainer import Trainer
 
@@ -30,7 +32,8 @@ def main(config):
     logger.info(model)
 
     # get function handles of loss and metrics
-    criterion = config.init_obj('loss', module_loss)
+#    criterion = config.init_obj('loss', module_loss)
+    criterion = getattr(module_loss, config['loss']['type'])
     metrics = [getattr(module_metric, met) for met in config['metrics']]
 
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler

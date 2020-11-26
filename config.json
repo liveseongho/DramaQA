@@ -4,7 +4,7 @@
     "seed": 123,
 
     "model": {
-        "type": "MCM",
+        "type": "OpenEnded",
         "args": {
             "visual_dim": 512,
             "n_dim": 300,
@@ -25,7 +25,7 @@
     "data_loader": {
         "type": "DramaQADataLoader",
         "args":{
-            "batch_size": 4,
+            "batch_size": 1,
             "shuffle": true,
             "num_workers": 0,
 
@@ -36,7 +36,7 @@
             "remove_metadata": false,
 
             "tokenizer": "nonword",
-            "bert": true,
+            "bert": false,
             "vocab_freq": 1,
             "lower": true,
             "save_cache": true,
@@ -76,8 +76,8 @@
             "visual_type": "shot",
             "cc_spkr": false,
             "cc_qa": true,
-            "flatten": false
-
+            "flatten": false,
+            "is_open_ended": true
         }
     },
     "optimizer": {
@@ -89,15 +89,14 @@
         }
     },
     "loss": {
-     "type": "CrossEntropyLoss",
-     "args": {}
+        "type": "nll_loss",
+        "args": {}
     },
     "metrics": [
-        "accuracy",
-        "accuracy_diff1",
-        "accuracy_diff2",
-        "accuracy_diff3",
-        "accuracy_diff4"
+        "Bleu",
+        "Meteor",
+        "Rouge",
+        "Cider"
     ],
     "lr_scheduler": {
         "type": "StepLR",

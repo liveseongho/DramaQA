@@ -9,6 +9,7 @@ from .preprocess_script import empty_sub, build_word_vocabulary, preprocess_text
 from .preprocess_image import process_video
 from .modules_language import get_tokenizer
 from .data_loaders_bert import MultiModalData_BERT
+from .data_loaders_open_ended import MultiModalData_OpenEnded
 import os
 import numpy as np
 from pathlib import Path
@@ -64,7 +65,6 @@ class TextData:
                 preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.pickle_data_path)
             else:
                 preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.nc_data_path)
-
         # load data
         if not self.args['remove_coreference']:
             print("Loading processed dataset from path: %s." % self.pickle_data_path[mode])
@@ -344,10 +344,13 @@ class MultiModalData(Dataset):
 
 class DramaQADataLoader(BaseDataLoader):
     def __init__(self, mode, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True, vocab=None, **kwargs):
-        if kwargs['bert']:
-            dataset = MultiModalData_BERT(kwargs, mode=mode)
+        if kwargs['is_open_ended']:
+            dataset = MultiModalData_OpenEnded(kwargs, mode=mode)
         else:
-            dataset = MultiModalData(kwargs, mode=mode)
+            if kwargs['bert']:
+                dataset = MultiModalData_BERT(kwargs, mode=mode)
+            else:
+                dataset = MultiModalData(kwargs, mode=mode)
 
         self.vocab = dataset.vocab
         super().__init__(dataset, batch_size, shuffle, validation_split, num_workers, dataset.collate_fn)
