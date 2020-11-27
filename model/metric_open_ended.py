@@ -3,9 +3,8 @@ import torch
 from nltk.translate.bleu_score import sentence_bleu
 from nltk.translate.meteor_score import meteor_score
 
-#from .pycocoevalcap.meteor.meteor import Meteor
-from .pycocoevalcap.rouge.rouge import Rouge
-from .pycocoevalcap.cider.cider import Cider
+from pycocoevalcap.rouge.rouge import Rouge
+from pycocoevalcap.cider.cider import Cider
 
 scorers = {
     'rouge': (Rouge(), "ROUGE_L"),
