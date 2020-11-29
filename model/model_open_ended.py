@@ -169,7 +169,7 @@ class OpenEnded(BaseModel):
     
         use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
        
-        decoder_outputs = torch.empty(target_length, 1, self.V).to(self.device)
+        decoder_outputs = torch.zeros(target_length, 1, self.V).to(self.device)
         if use_teacher_forcing:
             for di in range(target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(

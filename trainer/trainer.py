@@ -56,6 +56,7 @@ class Trainer(BaseTrainer):
                 loss += self.criterion(output[di] ,target[di])
                 topv, topi = output[di].topk(1)
                 pred.append(topi.item())
+            loss = loss / len(target)
             pred = torch.tensor(pred)
             target = target.transpose(0, 1)
             target = target.squeeze(0)
@@ -64,7 +65,6 @@ class Trainer(BaseTrainer):
             self.optimizer.step()
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())
-            
             
             for met in self.metric_ftns:
                 if 'accuracy_diff' in met.__name__:
@@ -122,6 +122,7 @@ class Trainer(BaseTrainer):
                     loss += self.criterion(output[di] ,target[di])
                     topv, topi = output[di].topk(1)
                     pred.append(topi.item())
+                loss = loss / len(target)
                 pred = torch.tensor(pred)
                 target = target.transpose(0, 1)
                 target = target.squeeze(0)
