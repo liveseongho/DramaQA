@@ -4,7 +4,7 @@
     "seed": 123,
 
     "model": {
-        "type": "OpenEnded",
+        "type": "GPT2LMHeadModel",
         "args": {
             "visual_dim": 512,
             "n_dim": 300,
@@ -77,11 +77,12 @@
             "cc_spkr": false,
             "cc_qa": true,
             "flatten": false,
-            "is_open_ended": true
+            "is_open_ended": true,
+            "is_gpt2": true
         }
     },
     "optimizer": {
-        "type": "Adam",
+        "type": "AdamW",
         "args":{
             "lr": 1e-4,
             "weight_decay": 1e-5,

@@ -8,14 +8,17 @@ import numpy as np
 import data_loader.data_loaders as module_data
 import model.loss as module_loss
 # import model.metric as module_metric
-import model.metric_open_ended as module_metric
+import model.metric_gpt as module_metric
 # import model.mdam as module_model
 # import model_tvqa.tvqa_abc as module_model
 # import model.model as module_model
 # import model.baseline as module_model
-import model.model_open_ended as module_model
+#import model.model_gpt as module_model
+from model.model_gpt import VideoGPT2LMHeadModel
 from parse_config import ConfigParser
 from trainer import Trainer
+
+import os
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -28,7 +31,14 @@ def main(config):
     valid_data_loader = config.init_obj('data_loader', module_data, 'val')
 
     # build model architecture, then print to console
-    model = config.init_obj('model', module_model, pt_emb=data_loader.vocab)
+#    model = config.init_obj('model', module_model)#, pt_emb=data_loader.vocab)
+    model_class = VideoGPT2LMHeadModel
+    model = model_class.from_pretrained("gpt2")
+#    model.to(args.device)
+    log_path = "log/"
+    CONFIG_NAME = "config.json"
+    getattr(model, 'module', model).config.to_json_file(os.path.join(log_path, CONFIG_NAME))
+#    model = GPT2LMHeadModel(config)
     logger.info(model)
 
     # get function handles of loss and metrics

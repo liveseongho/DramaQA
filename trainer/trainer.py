@@ -2,8 +2,13 @@ import numpy as np
 import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
-from utils import inf_loop, MetricTracker, batch_to_device
+from utils import inf_loop, MetricTracker, batch_to_device, beam_search, sample_sequence
 from tqdm  import tqdm
+from transformers import GPT2Tokenizer
+
+SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", 
+                  "<subtitle>", "<video>", "<pad>"]
+SPECIAL_TOKENS_DICT = {'bos_token': "<bos>", 'eos_token': "<eos>", 'additional_special_tokens': ["<que>", "<ans>", "<speaker>", "<subtitle>", "<video>"], 'pad_token': "<pad>"}
 
 class Trainer(BaseTrainer):
     """
@@ -26,9 +31,14 @@ class Trainer(BaseTrainer):
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
-
         self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
         self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
+
+        tokenizer_class = GPT2Tokenizer
+        self.tokenizer = tokenizer_class.from_pretrained("gpt2")
+        self.tokenizer.add_special_tokens(SPECIAL_TOKENS_DICT)
+        self.model.resize_token_embeddings(len(self.tokenizer))
+        self.model.to(self.device)
 
     def _train_epoch(self, epoch):
         """
@@ -40,37 +50,26 @@ class Trainer(BaseTrainer):
         self.model.train()
         self.train_metrics.reset()
         tqdm_bar = tqdm(self.data_loader, desc='Train Epoch : {}'.format(epoch))
-        
         for batch_idx, batch in enumerate(tqdm_bar):
-            data, target = batch_to_device(self.model_inputs, batch, self.device)
-            # data, target = data.to(self.device), target.to(self.device)
+            input_ids = batch[0].to(self.device)
+            token_type_ids = batch[1].to(self.device)
+            lm_labels = batch[2].to(self.device)
+            input_ids = self.model.transformer.wte(input_ids)
+            answer_list = batch[3]
             self.optimizer.zero_grad()
-            output = self.model(data)
-
-            # Comment(Donggeon, 20201119): changing target for open_ended
-            target = data['ans']
-            loss = 0
-            pred = []
-            target = target.transpose(0, 1)
-            for di in range(len(target)):
-                loss += self.criterion(output[di] ,target[di])
-                topv, topi = output[di].topk(1)
-                pred.append(topi.item())
-            loss = loss / len(target)
-            pred = torch.tensor(pred)
-            target = target.transpose(0, 1)
-            target = target.squeeze(0)
-
+            loss = self.model(input_embs = input_ids, token_type_ids = token_type_ids, labels = lm_labels)[0]
+        
             loss.backward()
             self.optimizer.step()
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())
-            
-            for met in self.metric_ftns:
-                if 'accuracy_diff' in met.__name__:
-                    self.train_metrics.update(met.__name__, *met(output, target, batch['q_level_logic']))
-                else:
-                    self.train_metrics.update(met.__name__, met(pred, target, self.model.vocab))
+
+#            for met in self.metric_ftns:
+#                if 'accuracy_diff' in met.__name__:
+#                    self.train_metrics.update(met.__name__, *met(output, target, batch['q_level_logic']))
+#                else:
+#                    self.train_metrics.update(met.__name__, met(answer_list, target, self.model.vocab))
+
 
             if batch_idx % self.log_step == 0 or batch_idx == self.len_epoch - 1:
                 tqdm_bar.set_description('Train Epoch: {} {} Loss: {:.6f}'.format(
@@ -89,11 +88,13 @@ class Trainer(BaseTrainer):
             if batch_idx == self.len_epoch:
                 break
         log = self.train_metrics.result()
+    
 
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
             log.update(**{'val_'+ k : v for k, v in val_log.items()})
 
+        self.tokenizer.save_vocabulary('log/')
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
         return log
@@ -110,31 +111,20 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             tqdm_bar = tqdm(self.valid_data_loader, desc='Valid Epoch: {}'.format(epoch))
             for batch_idx, batch in enumerate(tqdm_bar):
-                data, target = batch_to_device(self.model_inputs, batch, self.device)
-                output = self.model(data)
-    
-                # Comment(Donggeon, 20201119): changing target for open_ended
-                target = data['ans']
-                loss = 0
-                pred = []
-                target = target.transpose(0, 1)
-                for di in range(len(target)):
-                    loss += self.criterion(output[di] ,target[di])
-                    topv, topi = output[di].topk(1)
-                    pred.append(topi.item())
-                loss = loss / len(target)
-                pred = torch.tensor(pred)
-                target = target.transpose(0, 1)
-                target = target.squeeze(0)
-    
+                input_ids = batch[0].to(self.device)
+                token_type_ids = batch[1].to(self.device)
+                lm_labels = batch[2].to(self.device)
+                target = batch[3]
+                 
+                self.optimizer.zero_grad()
+                output = sample_sequence(self.model, input_ids, token_type_ids, self.tokenizer, self.device)
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                self.valid_metrics.update('loss', loss.item())
                 for met in self.metric_ftns:
                     if 'accuracy_diff' in met.__name__:
                         self.valid_metrics.update(met.__name__, *met(output, target, batch['q_level_logic']))
                     else:
-                        self.valid_metrics.update(met.__name__, met(pred, target, self.model.vocab))
-    
+                        self.valid_metrics.update(met.__name__, met(output, target[0], self.tokenizer))
+
 
                 #self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
