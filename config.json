@@ -97,7 +97,9 @@
         "Bleu",
         "Meteor",
         "Rouge",
-        "Cider"
+        "Cider",
+        "BertScore",
+        "BleuRT"
     ],
     "lr_scheduler": {
         "type": "StepLR",
