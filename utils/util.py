@@ -6,8 +6,9 @@ from itertools import repeat
 from collections import OrderedDict
 
 import torch
-
+import numpy as np
 import torch.nn.functional as F
+import copy
 
 SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", 
                   "<subtitle>", "<video>", "<pad>"]
@@ -116,7 +117,7 @@ def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_len
     input_ids = input_ids.to(device)
     token_type_ids = token_type_ids.to(device)
      
-    for i in range(10):
+    for i in range(max_length):
         input_embs, token_ids = data_for_answer(input_ids, token_type_ids, current_output, tokenizer, device)
         input_embs = model.transformer.wte(input_embs)
         logits = model(input_embs, token_type_ids = token_ids)[0]
@@ -137,37 +138,37 @@ def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_len
 
     return current_output
 
-def beam_search(caption, history, tokenizer, model, args, current_output=None, video=None):
+def beam_search(model, input_ids, token_type_ids, tokenizer, device, max_length=20, min_length=1, penalty = 0.3, beam_size = 5,  video=None):
     special_tokens_ids = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
-    if current_output is None:
-        current_output = []
-    hyplist =([], 0., current_output)
+    current_output = []
+    hyplist =[([], 0., current_output)]
     best_state = None
     comp_hyplist = []
-    
-    for i in range(args.max_length):
+
+    input_ids, token_type_ids = masking_answer(input_ids, token_type_ids, tokenizer)
+    input_ids = input_ids.to(device)
+    token_type_ids = token_type_ids.to(device)
+   
+    for i in range(max_length):
         new_hyplist = []
         argmin = 0
         for out, lp, st in hyplist:
-            instance, sequence = build_input_from_segments(caption, history, st, tokenizer, with_eos=False, drop_caption=True)
+            input_embs, token_ids = data_for_answer(input_ids, token_type_ids, current_output, tokenizer, device)
+            input_embs = model.transformer.wte(input_embs)
 
-            input_ids = torch.tensor(instance["input_ids"], device=args.device).unsqueeze(0)
-            token_type_ids = torch.tensor(instance["token_type_ids"], device=args.device).unsqueeze(0)
-            input_embs = model.transformer.wte(input_ids)
             if video is not None:
                 input_embs = torch.cat([model.video_ff(video), input_embs], dim=1)
                 token_type_ids = torch.cat([torch.ones((1, video.size(1))).long().cuda() * tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_type_ids], dim=1)
 
-            logits = model(input_embs, token_type_ids=token_type_ids)
-            if "gpt2" == args.model:
-                logits = logits[0]
+            logits = model(input_embs, token_type_ids = token_ids)[0]
+
             logp = F.log_softmax(logits, dim=-1)[:, -1, :]
             lp_vec = logp.cpu().data.numpy() + lp
             lp_vec = np.squeeze(lp_vec)
-            if i >= args.min_length:
-                new_lp = lp_vec[tokenizer.eos_token_id] + args.penalty * (len(out) + 1)
+
+            if i >= min_length:
+                new_lp = lp_vec[tokenizer.eos_token_id] + penalty * (len(out) + 1)
                 comp_hyplist.append((out, new_lp))
-                print('out : ', out)
                 if best_state is None or best_state < new_lp:
                     best_state = new_lp
             count = 1
@@ -175,7 +176,7 @@ def beam_search(caption, history, tokenizer, model, args, current_output=None, v
                 if o == tokenizer.unk_token_id or o == tokenizer.eos_token_id:
                     continue
                 new_lp = lp_vec[o]
-                if len(new_hyplist) == args.beam_size:
+                if len(new_hyplist) == beam_size:
                     if new_hyplist[argmin][1] < new_lp:
                         new_st = copy.deepcopy(st)
                         new_st.append(int(o))
@@ -187,14 +188,12 @@ def beam_search(caption, history, tokenizer, model, args, current_output=None, v
                     new_st = copy.deepcopy(st)
                     new_st.append(int(o))
                     new_hyplist.append((out + [o], new_lp, new_st))
-                    if len(new_hyplist) == args.beam_size:
+                    if len(new_hyplist) == beam_size:
                         argmin = min(enumerate(new_hyplist), key=lambda h: h[1][1])[0]
                 count += 1
         hyplist = new_hyplist 
     if len(comp_hyplist) > 0:
-        print('comp_hyplist : ', comp_hyplist)
         maxhyps = sorted(comp_hyplist, key=lambda h: -h[1])[:1]
-        print('maxhyps : ', maxhyps)
         return maxhyps
     else:
         return [([], 0)]
