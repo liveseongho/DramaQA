@@ -81,6 +81,11 @@
             "is_gpt2": true
         }
     },
+
+    "generator": {
+        "is_beam_search": true
+    },
+
     "optimizer": {
         "type": "AdamW",
         "args":{

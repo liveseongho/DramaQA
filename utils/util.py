@@ -110,7 +110,7 @@ def masking_answer(input_ids, token_type_ids, tokenizer):
 
     return torch.unsqueeze(input_ids, 0), torch.unsqueeze(token_type_ids, 0)
 
-def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_length = 20, temperature = 0.7, top_k = 0, top_p = 0.9, min_length = 1):
+def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_length = 15, temperature = 0.7, top_k = 0, top_p = 0.9, min_length = 1):
     current_output = []
     special_tokens_ids = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
     input_ids, token_type_ids = masking_answer(input_ids, token_type_ids, tokenizer)
@@ -138,7 +138,7 @@ def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_len
 
     return current_output
 
-def beam_search(model, input_ids, token_type_ids, tokenizer, device, max_length=20, min_length=1, penalty = 0.3, beam_size = 5,  video=None):
+def beam_search(model, input_ids, token_type_ids, tokenizer, device, max_length=15, min_length=1, penalty = 0.3, beam_size = 5,  video=None):
     special_tokens_ids = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
     current_output = []
     hyplist =[([], 0., current_output)]
@@ -153,7 +153,7 @@ def beam_search(model, input_ids, token_type_ids, tokenizer, device, max_length=
         new_hyplist = []
         argmin = 0
         for out, lp, st in hyplist:
-            input_embs, token_ids = data_for_answer(input_ids, token_type_ids, current_output, tokenizer, device)
+            input_embs, token_ids = data_for_answer(input_ids, token_type_ids, st, tokenizer, device)
             input_embs = model.transformer.wte(input_embs)
 
             if video is not None:

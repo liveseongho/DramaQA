@@ -19,6 +19,7 @@ class Trainer(BaseTrainer):
         super().__init__(model, criterion, metric_ftns, optimizer, config)
         self.config = config['trainer']
         self.model_inputs = config['data_loader']['args']['inputs']
+        self.generator = config['generator']
         self.data_loader = data_loader
         if len_epoch is None:
             # epoch-based training
@@ -117,7 +118,10 @@ class Trainer(BaseTrainer):
                 target = batch[3]
                  
                 self.optimizer.zero_grad()
-                output = beam_search(self.model, input_ids, token_type_ids, self.tokenizer, self.device)[0][0]
+                if self.generator['is_beam_search']:
+                    output = beam_search(self.model, input_ids, token_type_ids, self.tokenizer, self.device)[0][0]
+                else:                
+                    output = sample_sequence(self.model, input_ids, token_type_ids, self.tokenizer, self.device)
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
                 for met in self.metric_ftns:
                     if 'accuracy_diff' in met.__name__:
