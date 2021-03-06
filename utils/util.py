@@ -97,7 +97,6 @@ def masking_answer(input_ids, token_type_ids, tokenizer):
     return_input_ids, return_token_type_ids = [], []
     input_ids = torch.squeeze(input_ids, 0)
     token_type_ids = torch.squeeze(token_type_ids, 0) 
-
     for input_id, token_type_id in zip(input_ids, token_type_ids):
         if token_type_id.item() != ans:
             return_input_ids.append(input_id)
@@ -110,16 +109,21 @@ def masking_answer(input_ids, token_type_ids, tokenizer):
 
     return torch.unsqueeze(input_ids, 0), torch.unsqueeze(token_type_ids, 0)
 
-def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_length = 15, temperature = 0.7, top_k = 0, top_p = 0.9, min_length = 1):
+def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_length = 15, temperature = 0.7, top_k = 0, top_p = 0.9, min_length = 1, video=None):
     current_output = []
     special_tokens_ids = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
     input_ids, token_type_ids = masking_answer(input_ids, token_type_ids, tokenizer)
     input_ids = input_ids.to(device)
     token_type_ids = token_type_ids.to(device)
-     
+    
     for i in range(max_length):
         input_embs, token_ids = data_for_answer(input_ids, token_type_ids, current_output, tokenizer, device)
         input_embs = model.transformer.wte(input_embs)
+        if video is not None:
+            input_embs = torch.cat([model.video_ff(video), input_embs], dim=1)
+            token_ids = torch.cat([torch.ones((1, video.size(1))).long().cuda() * tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_ids], dim=1)
+    
+
         logits = model(input_embs, token_type_ids = token_ids)[0]
 
         logits = logits[0, -1, :] / temperature
@@ -148,17 +152,18 @@ def beam_search(model, input_ids, token_type_ids, tokenizer, device, max_length=
     input_ids, token_type_ids = masking_answer(input_ids, token_type_ids, tokenizer)
     input_ids = input_ids.to(device)
     token_type_ids = token_type_ids.to(device)
-   
+
+  
     for i in range(max_length):
         new_hyplist = []
         argmin = 0
         for out, lp, st in hyplist:
             input_embs, token_ids = data_for_answer(input_ids, token_type_ids, st, tokenizer, device)
             input_embs = model.transformer.wte(input_embs)
-
             if video is not None:
                 input_embs = torch.cat([model.video_ff(video), input_embs], dim=1)
-                token_type_ids = torch.cat([torch.ones((1, video.size(1))).long().cuda() * tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_type_ids], dim=1)
+                token_ids = torch.cat([torch.ones((1, video.size(1))).long().cuda() * tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_ids], dim=1)
+        
 
             logits = model(input_embs, token_type_ids = token_ids)[0]
 

@@ -21,6 +21,7 @@ class Trainer(BaseTrainer):
         self.model_inputs = config['data_loader']['args']['inputs']
         self.generator = config['generator']
         self.data_loader = data_loader
+        self.video = config['data_loader']['args']['video']
         if len_epoch is None:
             # epoch-based training
             self.len_epoch = len(self.data_loader)
@@ -51,19 +52,40 @@ class Trainer(BaseTrainer):
         self.model.train()
         self.train_metrics.reset()
         tqdm_bar = tqdm(self.data_loader, desc='Train Epoch : {}'.format(epoch))
+        gradient_accumulation_steps = 8
+        iteration = 0
+        max_norm = 1.0
         for batch_idx, batch in enumerate(tqdm_bar):
             input_ids = batch[0].to(self.device)
+            
             token_type_ids = batch[1].to(self.device)
             lm_labels = batch[2].to(self.device)
-            input_ids = self.model.transformer.wte(input_ids)
             answer_list = batch[3]
-            self.optimizer.zero_grad()
-            loss = self.model(input_embs = input_ids, token_type_ids = token_type_ids, labels = lm_labels)[0]
+            i3d = batch[4][0].to(self.device)
+            i3d = i3d.unsqueeze(0)
+            input_mask = batch[5].to(self.device)
+            video_mask = batch[6].to(self.device)
+            reply_mask = batch[7].to(self.device)
+            
+            input_ids = self.model.transformer.wte(input_ids)
+            video_embs = self.model.video_ff(i3d)
+    
+            input_embs = torch.cat([video_embs, input_ids], dim=1)
+            token_type_ids = torch.cat([torch.ones((i3d.size(0), i3d.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_type_ids], dim=1)
+
+            video_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[video_mask, input_mask], mode = "video")[0]
+            reply_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[reply_mask, input_mask], mode = "reply")[0]
+            loss = (video_loss + reply_loss) / gradient_accumulation_steps
+#            loss = self.model(input_embs = input_ids, token_type_ids = token_type_ids, labels = lm_labels)[0]
         
             loss.backward()
-            self.optimizer.step()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
+            if iteration % gradient_accumulation_steps == 0:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())
+            iteration = iteration + 1
 
 #            for met in self.metric_ftns:
 #                if 'accuracy_diff' in met.__name__:
@@ -114,14 +136,14 @@ class Trainer(BaseTrainer):
             for batch_idx, batch in enumerate(tqdm_bar):
                 input_ids = batch[0].to(self.device)
                 token_type_ids = batch[1].to(self.device)
-                lm_labels = batch[2].to(self.device)
                 target = batch[3]
-                 
+                i3d = batch[4].to(self.device)
+
                 self.optimizer.zero_grad()
                 if self.generator['is_beam_search']:
-                    output = beam_search(self.model, input_ids, token_type_ids, self.tokenizer, self.device)[0][0]
+                    output = beam_search(self.model, input_ids, token_type_ids, self.tokenizer, self.device, video=i3d)[0][0]
                 else:                
-                    output = sample_sequence(self.model, input_ids, token_type_ids, self.tokenizer, self.device)
+                    output = sample_sequence(self.model, input_ids, token_type_ids, self.tokenizer, self.device, video=i3d)
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
                 for met in self.metric_ftns:
                     if 'accuracy_diff' in met.__name__:

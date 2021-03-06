@@ -291,22 +291,26 @@ class MultiModalData_GPT2(Dataset):
         return data
 
     
-    def process_image(idx, data):
-#        text = self.text[idx]
-#        vid = text['vid']
-#        visual_types = ['shot', 'frame']
-#        assert self.args['visual_type'] in visual_types, "visual_typoe should be %s." % (' or '.join(visual_types))
-#
-#        vfeatures, vmetas = self.image.get_bbft(vid)
-#
-#        if self.args['visual_type'] == 'frame':
-#            # vfeatures: [(num_frames*512), (num_frames*512), ...]
-#            # vmetas: [(num_frames*3*512), ...]
-#            vfeatures = np.concatenate(vfeatures, axis=0)
-#            vmetas = np.concatenate(vmetas, axis=0)
-#
-#        data['bbfts'] = vfeatures
-#        data['vgraphs'] = vmetas
+    def process_image(self, idx, data):
+        text = self.text[idx]
+        vid = text['vid']
+        vgg_path = '/data/dataset/AnotherMissOh/vggish/' + vid +'.npy'
+        i3d_flow_path = '/data/dataset/AnotherMissOh/i3d_flow/' + vid + '.npy'
+        i3d_rgb_path = '/data/dataset/AnotherMissOh/i3d_rgb/' + vid + '.npy'
+        vgg = np.load(vgg_path)
+        i3d_flow = np.load(i3d_flow_path)
+        i3d_rgb = np.load(i3d_rgb_path)
+        
+        sample_i3d_flow = i3d_flow[range(1, i3d_flow.shape[0], 1)]
+        sample_i3d_rgb = i3d_rgb[range(1, i3d_rgb.shape[0], 1)]
+
+        vgg = torch.from_numpy(vgg).float()
+        i3d_flow = torch.from_numpy(sample_i3d_flow).float()
+        i3d_rgb = torch.from_numpy(sample_i3d_rgb).float()
+        min_length = min([i3d_flow.size(0), i3d_rgb.size(0), vgg.size(0)])
+        i3d = torch.cat([i3d_flow[:min_length], i3d_rgb[:min_length], vgg[:min_length]], dim = 1)
+        data['i3d'] = i3d        
+        
         return data
 
     def __getitem__(self, idx):
@@ -315,10 +319,10 @@ class MultiModalData_GPT2(Dataset):
         
         input_ids, token_type_ids, lm_labels = data_for_gpt(data, self.tokenizer)
 
-#        data = process_image(idx, data)
+        data = self.process_image(idx, data)
         
         # currently not tensor yet
-        return input_ids, token_type_ids, lm_labels, data['str_ans']
+        return input_ids, token_type_ids, lm_labels, data['str_ans'], data['i3d']
 
     def padding(self, seq, pad_token):
         max_len = max([i.size(0) for i in seq])
@@ -332,19 +336,27 @@ class MultiModalData_GPT2(Dataset):
 
     # data padding
     def collate_fn(self, batch):
-        collected = defaultdict(list)
-        input_ids_list, token_type_ids_list, lm_labels_list, answer_list = [], [], [], []
+        input_ids_list, token_type_ids_list, lm_labels_list, answer_list, i3d_list = [], [], [], [], []
         for data in batch:
             input_ids_list.append(data[0])
             token_type_ids_list.append(data[1])
             lm_labels_list.append(data[2])
             answer_list.append(data[3])
+            i3d_list.append(data[4])
          
         input_ids = self.padding(input_ids_list, self.pad_token) 
         token_type_ids = self.padding(token_type_ids_list, self.pad_token)
         lm_labels = self.padding(lm_labels_list, -1)
-#        input_mask = input_ids != self.pad_token
+        input_mask = input_ids != self.pad_token
+
+        i3d = self.padding(i3d_list, self.pad_token)
+        i3d_mask = torch.sum(i3d != 1, dim=2) != 0
+        input_mask = torch.cat([i3d_mask, input_mask], dim=1)
+        i3d_labels = torch.ones((i3d.size(0), i3d.size(1))).long() * -1
+        video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(lm_labels.size())], 1)
+        reply_mask = torch.zeros(video_mask.size())
+        lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)
         
-        return input_ids, token_type_ids, lm_labels, answer_list#, input_mask
+        return input_ids, token_type_ids, lm_labels, answer_list, i3d, input_mask, video_mask, reply_mask#, input_mask
 
 

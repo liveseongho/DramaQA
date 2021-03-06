@@ -78,9 +78,12 @@
             "cc_qa": true,
             "flatten": false,
             "is_open_ended": true,
-            "is_gpt2": true
+            "is_gpt2": true,
+            "video": true
         }
     },
+
+    
 
     "generator": {
         "is_beam_search": true
