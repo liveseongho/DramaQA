@@ -204,7 +204,7 @@ class MultiModalData_GPT2(Dataset):
         self.tokenizer = self.tokenizer_class.from_pretrained('gpt2')
         self.tokenizer.add_special_tokens(SPECIAL_TOKENS_DICT)
         self.pad_token = self.tokenizer.pad_token_id
-
+        self.video = args['video']
         self.args = args
         self.mode = mode
 
@@ -316,13 +316,16 @@ class MultiModalData_GPT2(Dataset):
     def __getitem__(self, idx):
 
         data = self.process_text(idx)
-        
+        que = data['que'] 
         input_ids, token_type_ids, lm_labels = data_for_gpt(data, self.tokenizer)
-
-        data = self.process_image(idx, data)
         
+        if self.video:
+            data = self.process_image(idx, data)
+            return input_ids, token_type_ids, lm_labels, data['str_ans'], que, data['i3d']
+            
+        return input_ids, token_type_ids, lm_labels, data['str_ans'], que
         # currently not tensor yet
-        return input_ids, token_type_ids, lm_labels, data['str_ans'], data['i3d']
+
 
     def padding(self, seq, pad_token):
         max_len = max([i.size(0) for i in seq])
@@ -336,27 +339,29 @@ class MultiModalData_GPT2(Dataset):
 
     # data padding
     def collate_fn(self, batch):
-        input_ids_list, token_type_ids_list, lm_labels_list, answer_list, i3d_list = [], [], [], [], []
+        input_ids_list, token_type_ids_list, lm_labels_list, answer_list, i3d_list, que_list = [], [], [], [], [], []
         for data in batch:
             input_ids_list.append(data[0])
             token_type_ids_list.append(data[1])
             lm_labels_list.append(data[2])
             answer_list.append(data[3])
-            i3d_list.append(data[4])
-         
+            que_list.append(data[4])
+            if self.video: 
+                i3d_list.append(data[5])
         input_ids = self.padding(input_ids_list, self.pad_token) 
         token_type_ids = self.padding(token_type_ids_list, self.pad_token)
         lm_labels = self.padding(lm_labels_list, -1)
         input_mask = input_ids != self.pad_token
+        if self.video: 
+            i3d = self.padding(i3d_list, self.pad_token)
+            i3d_mask = torch.sum(i3d != 1, dim=2) != 0
+            input_mask = torch.cat([i3d_mask, input_mask], dim=1)
+            i3d_labels = torch.ones((i3d.size(0), i3d.size(1))).long() * -1
+            video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(lm_labels.size())], 1)
+            reply_mask = torch.zeros(video_mask.size())
+            lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)
+            return input_ids, token_type_ids, lm_labels, answer_list, input_mask, i3d, video_mask, reply_mask, que_list#, input_mask
 
-        i3d = self.padding(i3d_list, self.pad_token)
-        i3d_mask = torch.sum(i3d != 1, dim=2) != 0
-        input_mask = torch.cat([i3d_mask, input_mask], dim=1)
-        i3d_labels = torch.ones((i3d.size(0), i3d.size(1))).long() * -1
-        video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(lm_labels.size())], 1)
-        reply_mask = torch.zeros(video_mask.size())
-        lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)
-        
-        return input_ids, token_type_ids, lm_labels, answer_list, i3d, input_mask, video_mask, reply_mask#, input_mask
+        return input_ids, token_type_ids, lm_labels, answer_list, input_mask, que_list
 
 

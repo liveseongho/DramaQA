@@ -6,6 +6,8 @@ from utils import inf_loop, MetricTracker, batch_to_device, beam_search, sample_
 from tqdm  import tqdm
 from transformers import GPT2Tokenizer
 
+import json
+
 SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", 
                   "<subtitle>", "<video>", "<pad>"]
 SPECIAL_TOKENS_DICT = {'bos_token': "<bos>", 'eos_token': "<eos>", 'additional_special_tokens': ["<que>", "<ans>", "<speaker>", "<subtitle>", "<video>"], 'pad_token': "<pad>"}
@@ -57,26 +59,27 @@ class Trainer(BaseTrainer):
         max_norm = 1.0
         for batch_idx, batch in enumerate(tqdm_bar):
             input_ids = batch[0].to(self.device)
-            
             token_type_ids = batch[1].to(self.device)
             lm_labels = batch[2].to(self.device)
             answer_list = batch[3]
-            i3d = batch[4][0].to(self.device)
-            i3d = i3d.unsqueeze(0)
-            input_mask = batch[5].to(self.device)
-            video_mask = batch[6].to(self.device)
-            reply_mask = batch[7].to(self.device)
-            
+            input_mask = batch[4].to(self.device)
             input_ids = self.model.transformer.wte(input_ids)
-            video_embs = self.model.video_ff(i3d)
-    
-            input_embs = torch.cat([video_embs, input_ids], dim=1)
-            token_type_ids = torch.cat([torch.ones((i3d.size(0), i3d.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_type_ids], dim=1)
+            if self.video: 
+                i3d = batch[5][0].to(self.device)
+                i3d = i3d.unsqueeze(0)
+                video_mask = batch[6].to(self.device)
+                reply_mask = batch[7].to(self.device)
 
-            video_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[video_mask, input_mask], mode = "video")[0]
-            reply_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[reply_mask, input_mask], mode = "reply")[0]
-            loss = (video_loss + reply_loss) / gradient_accumulation_steps
-#            loss = self.model(input_embs = input_ids, token_type_ids = token_type_ids, labels = lm_labels)[0]
+                video_embs = self.model.video_ff(i3d)
+        
+                input_embs = torch.cat([video_embs, input_ids], dim=1)
+                token_type_ids = torch.cat([torch.ones((i3d.size(0), i3d.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_type_ids], dim=1)
+    
+                video_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[video_mask, input_mask], mode = "video")[0]
+                reply_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[reply_mask, input_mask], mode = "reply")[0]
+                loss = (video_loss + reply_loss) / gradient_accumulation_steps
+            else:
+                loss = self.model(input_embs = input_ids, token_type_ids = token_type_ids, labels = lm_labels)[0]
         
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
@@ -137,13 +140,16 @@ class Trainer(BaseTrainer):
                 input_ids = batch[0].to(self.device)
                 token_type_ids = batch[1].to(self.device)
                 target = batch[3]
-                i3d = batch[4].to(self.device)
+                i3d = None
+                if self.video:
+                    i3d = batch[5].to(self.device)
 
                 self.optimizer.zero_grad()
                 if self.generator['is_beam_search']:
                     output = beam_search(self.model, input_ids, token_type_ids, self.tokenizer, self.device, video=i3d)[0][0]
                 else:                
                     output = sample_sequence(self.model, input_ids, token_type_ids, self.tokenizer, self.device, video=i3d)
+
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
                 for met in self.metric_ftns:
                     if 'accuracy_diff' in met.__name__:
