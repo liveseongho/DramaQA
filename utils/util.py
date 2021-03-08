@@ -58,13 +58,14 @@ def data_for_gpt(data, tokenizer):
     for spkr, script in zip(data['spkr'], data['script']):
         sequence_spkr = [speaker] + [spkr] + [eos]
         if len(script) == 1:
-            sequence_script = [subtitle] + [bos] + [script[0]] + [eos] + [eos]
+            sequence_script = [subtitle] + [script[0]] + [eos]
         else :
-            sequence_script = [subtitle] + [bos] + script[0] + [eos] + [eos]
+            sequence_script = [subtitle] + script[0] + [eos]
         sequence = sequence + sequence_spkr + sequence_script
         token_type_ids = token_type_ids + [speaker] * len(sequence_spkr) + [subtitle] * len(sequence_script)
 
-    sequence_que = [que] + [bos] + data['que'][0] + [eos] + [eos]
+#    sequence_que = [que] + [bos] + data['que'][0] + [eos] + [eos]
+    sequence_que = [que] + data['que'][0] + [eos]
     sequence = sequence + sequence_que
     token_type_ids = token_type_ids + [que] * len(sequence_que)
 
