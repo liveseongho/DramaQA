@@ -316,14 +316,15 @@ class MultiModalData_GPT2(Dataset):
     def __getitem__(self, idx):
 
         data = self.process_text(idx)
-        que = data['que'] 
+        que = data['que']
+        level = data['q_level_logic'] 
         input_ids, token_type_ids, lm_labels = data_for_gpt(data, self.tokenizer)
         
         if self.video:
             data = self.process_image(idx, data)
-            return input_ids, token_type_ids, lm_labels, data['str_ans'], que, data['i3d']
+            return input_ids, token_type_ids, lm_labels, data['str_ans'], que, data['i3d'], level
             
-        return input_ids, token_type_ids, lm_labels, data['str_ans'], que
+        return input_ids, token_type_ids, lm_labels, data['str_ans'], que, level
         # currently not tensor yet
 
 
@@ -339,7 +340,7 @@ class MultiModalData_GPT2(Dataset):
 
     # data padding
     def collate_fn(self, batch):
-        input_ids_list, token_type_ids_list, lm_labels_list, answer_list, i3d_list, que_list = [], [], [], [], [], []
+        input_ids_list, token_type_ids_list, lm_labels_list, answer_list, i3d_list, que_list, level_list = [], [], [], [], [], [], []
         for data in batch:
             input_ids_list.append(data[0])
             token_type_ids_list.append(data[1])
@@ -348,6 +349,9 @@ class MultiModalData_GPT2(Dataset):
             que_list.append(data[4])
             if self.video: 
                 i3d_list.append(data[5])
+                level_list.append(data[6])
+            else:
+                level_list.append(data[5])
         input_ids = self.padding(input_ids_list, self.pad_token) 
         token_type_ids = self.padding(token_type_ids_list, self.pad_token)
         lm_labels = self.padding(lm_labels_list, -1)
@@ -360,8 +364,8 @@ class MultiModalData_GPT2(Dataset):
             video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(lm_labels.size())], 1)
             reply_mask = torch.zeros(video_mask.size())
             lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)
-            return input_ids, token_type_ids, lm_labels, answer_list, input_mask, i3d, video_mask, reply_mask, que_list#, input_mask
+            return input_ids, token_type_ids, lm_labels, answer_list, input_mask, i3d, video_mask, reply_mask, que_list, level_list#, input_mask
 
-        return input_ids, token_type_ids, lm_labels, answer_list, input_mask, que_list
+        return input_ids, token_type_ids, lm_labels, answer_list, input_mask, que_list, level_list
 
 
