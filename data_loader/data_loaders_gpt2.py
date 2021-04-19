@@ -6,7 +6,7 @@ import torch
 
 from utils import *
 from .preprocess_script_gpt2 import empty_sub, preprocess_text
-from .preprocess_image import process_video
+from .preprocess_image_gpt2 import process_video
 from .modules_language import get_tokenizer
 from .data_loaders_bert import MultiModalData_BERT
 import os
@@ -16,11 +16,13 @@ from pathlib import Path
 from itertools import chain
 from torch.utils.data import Dataset
 from transformers import *
+
 # debug
 from pprint import pprint
 
-SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", "<subtitle>", "<video>", "<pad>"]
-SPECIAL_TOKENS_DICT = {'bos_token': "<bos>", 'eos_token': "<eos>", 'additional_special_tokens': ["<que>", "<ans>", "<speaker>", "<subtitle>", "<video>"], 'pad_token': "<pad>"}
+SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", "<subtitle>",
+                  "<bounding_feature>", "<person>", "<behavior>", "<emotion>", "<video>", "<pad>"]
+SPECIAL_TOKENS_DICT = {'bos_token': "<bos>", 'eos_token': "<eos>", 'additional_special_tokens': ["<que>", "<ans>", "<speaker>", "<subtitle>", "<bounding_feature>", "<person>", "<behavior>", "<emotion>", "<video>"], 'pad_token': "<pad>"}
 #MODEL_INPUTS = ["input_ids", "token_type_ids","lm_labels"]
 #PADDED_INPUTS = ["input_ids", "token_type_ids","lm_labels"]
 
@@ -87,7 +89,6 @@ class TextData:
 
         ###### Special indices ######
         #self.tokenizer.add_special_tokens(SPECIAL_TOKENS_DICT)
-        bos, eos, que, ans, speaker, subtitle  = self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[:-2]) 
         self.none_index = speaker_index['None']
         self.pad_index = self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-1])
         self.eos_index = self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[1])
@@ -131,27 +132,28 @@ class TextData:
 
 
 class ImageData:
-    def __init__(self, args, mode, vocab):
+    def __init__(self, args, mode, tokenizer):
         self.args = args
         args['device'] = torch.device('cuda:0')
+        self.tokenizer = tokenizer
 
 #        self.vocab = vocab
-#        self.pad_index = vocab.get_index(pad_token)
-#        self.none_index = speaker_index['None']
-#        self.visual_pad = [self.none_index, self.pad_index, self.pad_index]
+        self.pad_index = self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-1]) 
+        self.none_index = speaker_index['None']
+        self.visual_pad = [self.none_index, self.pad_index, self.pad_index]
 
         self.image_path = args['image_path']
         self.image_dim = args['image_dim']
 
         self.processed_video_path = self.get_processed_video_path(self.image_path)
-#        if not os.path.isfile(self.processed_video_path[mode]):
-#            process_video(args, self.processed_video_path, speaker_index, vocab)
+        if not os.path.isfile(self.processed_video_path[mode]):
+            process_video(args, self.processed_video_path, speaker_index, self.pad_index, self.tokenizer)
 
         print("Loading processed video input from path: %s." % self.processed_video_path[mode])
         self.image_dt = load_pickle(self.processed_video_path[mode])
 
     def get_processed_video_path(self, image_path):
-        return {m: Path(image_path) / 'cache' / ('processed_video_' + m + '.pickle') for m in modes}
+        return {m: Path(image_path) / 'cache_v2' / ('processed_video_' + m + '.pickle') for m in modes}
 
     def get_bbft(self, vid, flatten=False):
         bb_features = []
@@ -186,14 +188,14 @@ class ImageData:
                 vis_graph.extend(frame['persons'])
 
             if not bb_feature:
-#                vis_graph = self.visual_pad
+                vis_graph = self.visual_pad
                 bb_feature = [np.zeros(self.image_dim)]
             bb_feature = np.reshape(np.concatenate(bb_feature), (-1))
-#            vis_graph = np.reshape(vis_graph, (-1))
+            vis_graph = np.reshape(vis_graph, (-1))
             bb_features.append(bb_feature)
-#            visual_graphs.append(vis_graph)
+            visual_graphs.append(vis_graph)
 
-        return bb_features#, visual_graphs
+        return bb_features, visual_graphs
 
 
 class MultiModalData_GPT2(Dataset):
@@ -205,6 +207,8 @@ class MultiModalData_GPT2(Dataset):
         self.tokenizer.add_special_tokens(SPECIAL_TOKENS_DICT)
         self.pad_token = self.tokenizer.pad_token_id
         self.video = args['video']
+        self.bbfts = args['bbfts']
+        self.meta = args['meta']
         self.args = args
         self.mode = mode
 
@@ -216,16 +220,16 @@ class MultiModalData_GPT2(Dataset):
 #        self.vocab = text_data.vocab
 
         ###### Image #####
-#        image_data = ImageData(args, mode, self.vocab)
-#        self.image = image_data
-#        self.image_dim = image_data.image_dim
+        image_data = ImageData(args, mode, self.tokenizer)
+        self.image = image_data
+        self.image_dim = image_data.image_dim
 
         ###### Constraints ######
         self.max_sub_len = args['max_sub_len']
         self.max_image_len = args['max_image_len']
 
         ###### Special indices ######
-#        self.none_index = speaker_index['None']
+        self.none_index = speaker_index['None']
 #        self.pad_index = self.vocab.stoi.get(pad_token)
 #        self.eos_index = self.vocab.stoi.get(eos_token)
 
@@ -313,18 +317,47 @@ class MultiModalData_GPT2(Dataset):
         
         return data
 
+    def process_meta_data(self, data, vid):
+        visual_types = ['shot', 'frame']
+        assert self.args['visual_type'] in visual_types, "visual_typoe should be %s." % (' or '.join(visual_types))
+
+        vfeatures, vmetas = self.image.get_bbft(vid)
+
+        if self.args['visual_type'] == 'frame':
+            # vfeatures: [(num_frames*512), (num_frames*512), ...]
+            # vmetas: [(num_frames*3*512), ...]
+            vfeatures = np.concatenate(vfeatures, axis=0)
+            vmetas = np.concatenate(vmetas, axis=0)
+
+        data['bbfts'] = vfeatures
+        data['vgraphs'] = vmetas
+        return data
+
+
     def __getitem__(self, idx):
 
         data = self.process_text(idx)
+        data = self.process_meta_data(data, self.text[idx]['vid'])
+        if self.meta:
+            input_ids, token_type_ids, lm_labels = data_for_gpt(data, self.tokenizer, meta = True)
+        else:
+            input_ids, token_type_ids, lm_labels = data_for_gpt(data, self.tokenizer, meta = False)
+        bbfts = []
+        for bbft in data['bbfts']:
+            num_bbft = int(len(bbft) / 512)
+            for num in range(num_bbft):
+                bbfts.append(bbft[num * 512 : (num + 1) * 512])
+        bbfts = torch.Tensor(bbfts).long()
+                
         que = data['que']
+        qid = data['qid']
         level = data['q_level_logic'] 
-        input_ids, token_type_ids, lm_labels = data_for_gpt(data, self.tokenizer)
-        
+
         if self.video:
             data = self.process_image(idx, data)
-            return input_ids, token_type_ids, lm_labels, data['str_ans'], que, data['i3d'], level
+            return input_ids, token_type_ids, lm_labels, data['str_ans'], que, data['i3d'], level, qid, bbfts
             
-        return input_ids, token_type_ids, lm_labels, data['str_ans'], que, level
+        return input_ids, token_type_ids, lm_labels, data['str_ans'], que, level, qid, bbfts
         # currently not tensor yet
 
 
@@ -340,7 +373,7 @@ class MultiModalData_GPT2(Dataset):
 
     # data padding
     def collate_fn(self, batch):
-        input_ids_list, token_type_ids_list, lm_labels_list, answer_list, i3d_list, que_list, level_list = [], [], [], [], [], [], []
+        input_ids_list, token_type_ids_list, lm_labels_list, answer_list, i3d_list, que_list, level_list, qid_list, bbfts_list = [], [], [], [], [], [], [], [], []
         for data in batch:
             input_ids_list.append(data[0])
             token_type_ids_list.append(data[1])
@@ -350,12 +383,25 @@ class MultiModalData_GPT2(Dataset):
             if self.video: 
                 i3d_list.append(data[5])
                 level_list.append(data[6])
+                qid_list.append(data[7])
+                bbfts_list.append(data[8])
             else:
                 level_list.append(data[5])
+                qid_list.append(data[6])
+                bbfts_list.append(data[7])
         input_ids = self.padding(input_ids_list, self.pad_token) 
         token_type_ids = self.padding(token_type_ids_list, self.pad_token)
         lm_labels = self.padding(lm_labels_list, -1)
         input_mask = input_ids != self.pad_token
+        if self.bbfts:
+            bbfts = bbfts_list[0]
+            bbfts_labels = torch.ones(bbfts.size(0)).long() * -1
+            bbfts_labels = bbfts_labels.unsqueeze(0)
+            lm_labels = torch.cat([bbfts_labels, lm_labels], dim=1)
+
+            bbfts = bbfts.unsqueeze(0)
+            bbfts_mask = torch.sum(bbfts != 1, dim=2) != 0
+            input_mask = torch.cat([bbfts_mask, input_mask], dim=1)
         if self.video: 
             i3d = self.padding(i3d_list, self.pad_token)
             i3d_mask = torch.sum(i3d != 1, dim=2) != 0
@@ -364,8 +410,8 @@ class MultiModalData_GPT2(Dataset):
             video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(lm_labels.size())], 1)
             reply_mask = torch.zeros(video_mask.size())
             lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)
-            return input_ids, token_type_ids, lm_labels, answer_list, input_mask, i3d, video_mask, reply_mask, que_list, level_list#, input_mask
+            return input_ids, token_type_ids, lm_labels, answer_list, input_mask, bbfts_list, i3d, video_mask, reply_mask, que_list, level_list, qid_list
 
-        return input_ids, token_type_ids, lm_labels, answer_list, input_mask, que_list, level_list
+        return input_ids, token_type_ids, lm_labels, answer_list, input_mask, bbfts_list, que_list, level_list, qid_list
 
 

@@ -8,9 +8,9 @@ from transformers import GPT2Tokenizer
 
 import json
 
-SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", 
-                  "<subtitle>", "<video>", "<pad>"]
-SPECIAL_TOKENS_DICT = {'bos_token': "<bos>", 'eos_token': "<eos>", 'additional_special_tokens': ["<que>", "<ans>", "<speaker>", "<subtitle>", "<video>"], 'pad_token': "<pad>"}
+SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", "<subtitle>",
+                  "<bounding_feature>", "<person>", "<behavior>", "<emotion>", "<video>", "<pad>"]
+SPECIAL_TOKENS_DICT = {'bos_token': "<bos>", 'eos_token': "<eos>", 'additional_special_tokens': ["<que>", "<ans>", "<speaker>", "<subtitle>", "<bounding_feature>", "<person>", "<behavior>", "<emotion>", "<video>"], 'pad_token': "<pad>"}
 
 class Trainer(BaseTrainer):
     """
@@ -24,6 +24,8 @@ class Trainer(BaseTrainer):
         self.generator = config['generator']
         self.data_loader = data_loader
         self.video = config['data_loader']['args']['video']
+        self.bbfts = config['data_loader']['args']['bbfts']
+        
         if len_epoch is None:
             # epoch-based training
             self.len_epoch = len(self.data_loader)
@@ -64,17 +66,27 @@ class Trainer(BaseTrainer):
             answer_list = batch[3]
             input_mask = batch[4].to(self.device)
             input_ids = self.model.transformer.wte(input_ids)
-            if self.video: 
-                i3d = batch[5][0].to(self.device)
-                i3d = i3d.unsqueeze(0)
-                video_mask = batch[6].to(self.device)
-                reply_mask = batch[7].to(self.device)
 
-                video_embs = self.model.video_ff(i3d)
-        
+            # processing bounding features
+            if self.bbfts:
+                bbfts_list = batch[5][0].to(self.device)
+                bbfts = self.model.align_model(bbfts_list.float()).unsqueeze(0)
+                input_ids = torch.cat([bbfts, input_ids], dim = 1)
+                token_type_ids = torch.cat([torch.ones((bbfts.size(0), bbfts.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[6]), token_type_ids], dim = 1) 
+
+            if self.video: 
+                i3d = batch[6][0].to(self.device)
+                i3d = i3d.unsqueeze(0)
+                video_mask = batch[7].to(self.device)
+                reply_mask = batch[8].to(self.device)
+                video_embs = self.model.video_ff(i3d) 
                 input_embs = torch.cat([video_embs, input_ids], dim=1)
                 token_type_ids = torch.cat([torch.ones((i3d.size(0), i3d.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_type_ids], dim=1)
-    
+
+                if self.bbfts:
+                    bbfts = self.model.video_inverse_ff(bbfts)
+                    i3d = torch.cat([i3d, bbfts], dim = 1) 
+                
                 video_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[video_mask, input_mask], mode = "video")[0]
                 reply_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[reply_mask, input_mask], mode = "reply")[0]
                 loss = (video_loss + reply_loss) / gradient_accumulation_steps
@@ -141,14 +153,19 @@ class Trainer(BaseTrainer):
                 token_type_ids = batch[1].to(self.device)
                 target = batch[3]
                 i3d = None
+                bbfts = None
+                if self.bbfts:
+                    bbfts_list = batch[5][0].to(self.device)
+                    bbfts = self.model.align_model(bbfts_list.float()).unsqueeze(0)
                 if self.video:
-                    i3d = batch[5].to(self.device)
+                    i3d = batch[6].to(self.device)
 
                 self.optimizer.zero_grad()
+                # deprecated
                 if self.generator['is_beam_search']:
                     output = beam_search(self.model, input_ids, token_type_ids, self.tokenizer, self.device, video=i3d)[0][0]
                 else:                
-                    output = sample_sequence(self.model, input_ids, token_type_ids, self.tokenizer, self.device, video=i3d)
+                    output = sample_sequence(self.model, input_ids, token_type_ids, self.tokenizer, self.device, video=i3d, bbfts = bbfts)
 
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
                 for met in self.metric_ftns:

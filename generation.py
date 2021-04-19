@@ -12,10 +12,9 @@ import os, json
 from transformers import *
 from model.model_gpt import VideoGPT2LMHeadModel
 
-SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", 
-                  "<subtitle>", "<video>", "<pad>"]
-SPECIAL_TOKENS_DICT = {'bos_token': "<bos>", 'eos_token': "<eos>", 'additional_special_tokens': ["<que>", "<ans>", "<speaker>", "<subtitle>", "<video>"], 'pad_token': "<pad>"}
-
+SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", "<subtitle>",
+                  "<bounding_feature>", "<person>", "<behavior>", "<emotion>", "<video>", "<pad>"]
+SPECIAL_TOKENS_DICT = {'bos_token': "<bos>", 'eos_token': "<eos>", 'additional_special_tokens': ["<que>", "<ans>", "<speaker>", "<subtitle>", "<bounding_feature>", "<person>", "<behavior>", "<emotion>", "<video>"], 'pad_token': "<pad>"}
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -26,14 +25,16 @@ def main(config):
     data_loader = config.init_obj('data_loader', module_data, 'val')
 
     # build model architecture
-    video = config['data_loader']['args']['inputs']
+    is_video = config['data_loader']['args']['video']
+    is_bbfts = config['data_loader']['args']['bbfts']
 
-    checkpoint = '/data/results/models/AAAI2021/0311_183723/'
+    checkpoint = 'log/'
     tokenizer_class = GPT2Tokenizer
     tokenizer = tokenizer_class.from_pretrained(checkpoint)
     tokenizer.add_special_tokens(SPECIAL_TOKENS_DICT)
 
-    checkpoint = '/data/results/models/AAAI2021/0311_183723/checkpoint-epoch10.pth'
+    checkpoint = '/data/results/models/AAAI2021/0418_211542/checkpoint-epoch5.pth'
+#    checkpoint = '/data/results/models/AAAI2021/0311_183723/checkpoint-epoch10.pth'
     checkpoint = torch.load(checkpoint)
     model_class = VideoGPT2LMHeadModel
 
@@ -49,7 +50,7 @@ def main(config):
     model = model.to(device)
     model.eval()
 
-    with open('/data/dataset/AnotherMissOh/AnotherMissOh_QA/AnotherMissOhQA_val_set_script.json', 'r') as f:
+    with open('/data/dataset/AnotherMissOh/AnotherMissOh_QA_DramaQAChallenge_v2.1/AnotherMissOhQA_val_set_script.json', 'r') as f:
         data_set = json.load(f)
 
     text_data = dict()
@@ -61,6 +62,7 @@ def main(config):
     data['level2'] = []
     data['level3'] = []
     data['level4'] = []
+
     with torch.no_grad():
         tqdm_bar = tqdm(data_loader, desc='Test Epoch')
         iteration = 0
@@ -69,19 +71,28 @@ def main(config):
             token_type_ids = batch[1].to(device)
             i3d = None
             level = 0
-            if video:
-                i3d = batch[5].to(device)            
-                que = batch[8][0][0]
-                level = batch[9][0]
+            bbfts = None
+            if is_bbfts:
+                bbfts_list = batch[5][0].to(device)
+                bbfts = model.align_model(bbfts_list.float()).unsqueeze(0)
+            if is_video:
+                i3d = batch[6].to(device)            
+                que = batch[9][0][0]
+                level = batch[10][0]
+                qid = batch[11][0]
             else: 
-                que = batch[5][0][0]
-                level = batch[9][0]
+                que = batch[6][0][0]
+                level = batch[7][0]
+                qid = batch[8][0]
             output = {}
             target = batch[3][0]
-            pred = sample_sequence(model, input_ids, token_type_ids, tokenizer, device, video=i3d)
+            pred = sample_sequence(model, input_ids, token_type_ids, tokenizer, device, video=i3d, bbfts = bbfts)
             output['Question'] = tokenizer.decode(que, skip_special_tokens=True)
             output['Target'] = tokenizer.decode(target, skip_special_tokens=True)
             output['Prediction'] = tokenizer.decode(pred, skip_special_tokens=True)
+#            if qid == 11753 or qid == 11842 or qid == 9939919 or qid == 9934695 or qid == 12890 or qid == 3335 or qid == 9921581 or qid == 9927959 or qid == 8905 or qid == 9934567:
+#            if qid == 9939919 or qid == 11776 or qid == 9938739 or qid == 12483 or qid == 9934799 or qid == 9921581 or qid == 3342 or qid == 9927959 or qid == 13010 or qid == 9934567 :
+#                data.append(output)
 
             if level == 1 and len(data['level1']) < 25:
                 data['level1'].append(output)
@@ -93,7 +104,7 @@ def main(config):
                 data['level4'].append(output)
 
             if iteration == 200:
-                path = './level_output_gpt2.json'
+                path = './level_output_M.json'
                 with open(path, 'w') as outfile:
                     json.dump(data, outfile, indent = 4)
                 break

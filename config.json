@@ -42,11 +42,11 @@
             "save_cache": true,
             "image_path": "/data/dataset/AnotherMissOh/AnotherMissOh_images",
             "visual_path": "/data/dataset/AnotherMissOh/AnotherMissOh_Visual.json",
-            "data_path": "/data/dataset/AnotherMissOh/AnotherMissOh_QA/AnotherMissOhQA_set_script.jsonl",
+            "data_path": "/data/dataset/AnotherMissOh/AnotherMissOh_QA_DramaQAChallenge_v2.1/AnotherMissOhQA_set_script.jsonl",
             "subtitle_path": "/data/dataset/AnotherMissOh/AnotherMissOh_script.json",
-            "qa_path": "/data/dataset/AnotherMissOh/AnotherMissOh_QA",
+            "qa_path": "/data/dataset/AnotherMissOh/AnotherMissOh_QA_DramaQAChallenge_v2.1",
             "glove_path": "/data/dataset/AnotherMissOh/glove.6B.300d.txt",
-            "vocab_path": "/data/dataset/AnotherMissOh/vocab.pickle",
+            "vocab_path": "/data/dataset/AnotherMissOh/AnotherMiss_Oh_QA_DramaQAChallenge_v2.1/vocab.pickle",
 
             "image_dim": 512,
 
@@ -79,14 +79,14 @@
             "flatten": false,
             "is_open_ended": true,
             "is_gpt2": true,
-            "video": true
+            "video": true,
+            "bbfts": true,
+            "meta": false
         }
     },
 
-    
-
     "generator": {
-        "is_beam_search": true
+        "is_beam_search": false
     },
 
     "optimizer": {

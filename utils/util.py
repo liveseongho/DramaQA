@@ -10,8 +10,8 @@ import numpy as np
 import torch.nn.functional as F
 import copy
 
-SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", 
-                  "<subtitle>", "<video>", "<pad>"]
+SPECIAL_TOKENS = ["<bos>", "<eos>", "<que>", "<ans>", "<speaker>", "<subtitle>",
+                  "<bounding_feature>", "<person>", "<behavior>", "<emotion>", "<video>", "<pad>"]
 
 def top_filtering(logits, top_k=0, top_p=0.0, threshold=-float('Inf'), filter_value=-float('Inf')):
     """ Filter a distribution of logits using top-k, top-p (nucleus) and/or threshold filtering
@@ -51,10 +51,19 @@ def top_filtering(logits, top_k=0, top_p=0.0, threshold=-float('Inf'), filter_va
 
     return logits
 
-def data_for_gpt(data, tokenizer):
-    bos, eos, que, ans, speaker, subtitle  = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[:-2]) 
+def data_for_gpt(data, tokenizer, meta):
+    bos, eos, que, ans, speaker, subtitle, bounding_feature, person, behavior, emotion = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[:-2]) 
+
     token_type_ids = []
     sequence = []
+    if meta:
+        for vgraph in data['vgraphs']:
+            sequence_person = [person] + [vgraph[0]] + [eos]
+            sequence_behavior = [behavior] + [vgraph[1]] + [eos] 
+            sequence_emotion = [emotion] + [vgraph[2]] + [eos]
+            sequence = sequence + sequence_person + sequence_behavior + sequence_emotion
+            token_type_ids = token_type_ids + [person] * len(sequence_person) + [behavior] * len(sequence_behavior) + [emotion] * len(sequence_emotion)
+    
     for spkr, script in zip(data['spkr'], data['script']):
         sequence_spkr = [speaker] + [spkr] + [eos]
         if len(script) == 1:
@@ -64,7 +73,6 @@ def data_for_gpt(data, tokenizer):
         sequence = sequence + sequence_spkr + sequence_script
         token_type_ids = token_type_ids + [speaker] * len(sequence_spkr) + [subtitle] * len(sequence_script)
 
-#    sequence_que = [que] + [bos] + data['que'][0] + [eos] + [eos]
     sequence_que = [que] + data['que'][0] + [eos]
     sequence = sequence + sequence_que
     token_type_ids = token_type_ids + [que] * len(sequence_que)
@@ -72,15 +80,16 @@ def data_for_gpt(data, tokenizer):
     sequence_ans = [ans] + data['ans'][0] + [eos]
     lm_labels = ([-1] * len(sequence)) + sequence_ans
     token_type_ids = token_type_ids + [ans] * len(sequence_ans)
+
     input_ids = sequence + sequence_ans
-    input_ids = torch.Tensor(input_ids).long() 
+    input_ids = torch.Tensor(input_ids).long()
     token_type_ids = torch.Tensor(token_type_ids).long() 
     lm_labels = torch.Tensor(lm_labels).long() 
 
     return input_ids, token_type_ids, lm_labels
 
 def data_for_answer(input_ids, token_type_ids, answer, tokenizer, device):
-    bos, eos, que, ans  = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[:-4])
+    bos, eos, que, ans  = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[:-8])
     if len(answer) == 0 :
         return input_ids, token_type_ids 
     sequence_ans = answer
@@ -110,7 +119,7 @@ def masking_answer(input_ids, token_type_ids, tokenizer):
 
     return torch.unsqueeze(input_ids, 0), torch.unsqueeze(token_type_ids, 0)
 
-def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_length = 15, temperature = 0.7, top_k = 0, top_p = 0.9, min_length = 1, video=None):
+def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_length = 30, temperature = 0.7, top_k = 8, top_p = 0.9, min_length = 1, video=None, bbfts = None):
     current_output = []
     special_tokens_ids = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
     input_ids, token_type_ids = masking_answer(input_ids, token_type_ids, tokenizer)
@@ -120,9 +129,12 @@ def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_len
     for i in range(max_length):
         input_embs, token_ids = data_for_answer(input_ids, token_type_ids, current_output, tokenizer, device)
         input_embs = model.transformer.wte(input_embs)
+        if bbfts is not None:
+            input_embs = torch.cat([bbfts, input_embs], dim = 1)
+            token_ids = torch.cat([torch.ones((bbfts.size(0), bbfts.size(1))).long().cuda() * tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[6]), token_ids], dim=1)
         if video is not None:
             input_embs = torch.cat([model.video_ff(video), input_embs], dim=1)
-            token_ids = torch.cat([torch.ones((1, video.size(1))).long().cuda() * tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_ids], dim=1)
+            token_ids = torch.cat([torch.ones((video.size(0), video.size(1))).long().cuda() * tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_ids], dim=1)
     
 
         logits = model(input_embs, token_type_ids = token_ids)[0]
@@ -143,7 +155,7 @@ def sample_sequence(model, input_ids, token_type_ids, tokenizer, device, max_len
 
     return current_output
 
-def beam_search(model, input_ids, token_type_ids, tokenizer, device, max_length=15, min_length=1, penalty = 0.3, beam_size = 5,  video=None):
+def beam_search(model, input_ids, token_type_ids, tokenizer, device, max_length=30, min_length=1, penalty = 0.3, beam_size = 5,  video=None):
     special_tokens_ids = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
     current_output = []
     hyplist =[([], 0., current_output)]
