@@ -81,7 +81,8 @@
             "is_gpt2": true,
             "video": true,
             "bbfts": true,
-            "meta": false
+            "meta": false,
+            "preprocess_text": false
         }
     },
 

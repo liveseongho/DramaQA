@@ -54,7 +54,7 @@ def tokenize(obj,tokenizer):
 
 
 class TextData:
-    def __init__(self, args, mode, tokenizer, split_tool, vocab=None):
+    def __init__(self, args, mode, tokenizer, split_tool, preprocess_text = True, vocab=None):
         self.args = args
         self.tokenizer = tokenizer
 
@@ -74,10 +74,11 @@ class TextData:
 #            print('There is no cached vocab.')
 #            #self.tokenizer, _ = get_tokenizer(args)
 #            self.vocab = build_word_vocabulary(self.args, self.tokenizer, self.json_data_path)
-        if not self.args['remove_coreference']:
-            preprocess_text(self.tokenizer, split_tool, self.json_data_path, self.pickle_data_path)
-        else:
-            preprocess_text(self.tokenizer, split_tool, self.json_data_path, self.nc_data_path)
+        if preprocess_text:
+           if not self.args['remove_coreference']:
+               preprocess_text(self.tokenizer, split_tool, self.json_data_path, self.pickle_data_path)
+           else:
+               preprocess_text(self.tokenizer, split_tool, self.json_data_path, self.nc_data_path)
     
         # load data
         if not self.args['remove_coreference']:
@@ -214,7 +215,7 @@ class MultiModalData_GPT2(Dataset):
 
         ###### Text ######
         split_tool, _ = get_tokenizer(args)
-        text_data = TextData(args, mode, self.tokenizer, split_tool)
+        text_data = TextData(args, mode, self.tokenizer, split_tool, args['preprocess_text'])
         self.text = text_data.data
         self.get_script = text_data.get_script
 #        self.vocab = text_data.vocab
@@ -407,6 +408,10 @@ class MultiModalData_GPT2(Dataset):
             i3d_mask = torch.sum(i3d != 1, dim=2) != 0
             input_mask = torch.cat([i3d_mask, input_mask], dim=1)
             i3d_labels = torch.ones((i3d.size(0), i3d.size(1))).long() * -1
+            # TODO: Apply bbfts video masking
+#            if self.bbfts:
+#                bbfts_mask = torch.cat([torch.zeros((bbfts.size(0), bbfts.size(1))), torch.ones(lm_labels.size())], 1)
+#            video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(lm_labels.size())], 1)
             video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(lm_labels.size())], 1)
             reply_mask = torch.zeros(video_mask.size())
             lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)

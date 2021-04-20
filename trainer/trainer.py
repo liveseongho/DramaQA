@@ -63,7 +63,6 @@ class Trainer(BaseTrainer):
             input_ids = batch[0].to(self.device)
             token_type_ids = batch[1].to(self.device)
             lm_labels = batch[2].to(self.device)
-            answer_list = batch[3]
             input_mask = batch[4].to(self.device)
             input_ids = self.model.transformer.wte(input_ids)
 
@@ -132,7 +131,7 @@ class Trainer(BaseTrainer):
             val_log = self._valid_epoch(epoch)
             log.update(**{'val_'+ k : v for k, v in val_log.items()})
 
-        self.tokenizer.save_vocabulary('log/')
+        self.tokenizer.save_vocabulary(self.checkpoint_dir)
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
         return log
