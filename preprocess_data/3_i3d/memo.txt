@@ -1,0 +1,41 @@
+ywjang@ywjang302s:~/DramaQA2021/DramaQA/pytorch-resnet3d$ sudo python main.py
+args:
+Namespace(batch_size=1, gpu='0', load_model='pretrained/i3d_r50_nl_kinetics.pth', mode='rgb', root='/data/dataset/Anot
+herMissOh/AnotherMissOh_images', save_dir='/data/dataset/AnotherMissOh/i3d_rgb')
+start time: 7_h 28_m 47_s
+all_len: 1
+index: 0
+input_imgs_key: AnotherMissOh01/001/0078/
+shape: (9, 768, 1024, 3)
+data: torch.Size([1, 3, 9, 224, 224]) ['AnotherMissOh01/001/0078/']
+inputs.shape, img_dir: torch.Size([1, 3, 9, 224, 224]) ['AnotherMissOh01/001/0078/']
+batch[frames].shape: torch.Size([1, 3, 9, 224, 224])
+2
+roi_feat.shape: torch.Size([1, 2048, 1, 7, 7])
+avg_feat.shape: torch.Size([1, 400])
+Traceback (most recent call last):
+  File "main.py", line 134, in <module>
+    run(mode=args.mode, root=args.root, batch_size=args.batch_size, save_dir=args.save_dir, parallel=True)
+  File "main.py", line 119, in run
+    i3d_avg_feat[cnt, :] = avg_feat
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "/usr/local/lib/python3.6/dist-packages/h5py/_hl/dataset.py", line 707, in __setitem__
+    for fspace in selection.broadcast(mshape):
+  File "/usr/local/lib/python3.6/dist-packages/h5py/_hl/selections.py", line 299, in broadcast
+    raise TypeError("Can't broadcast %s -> %s" % (target_shape, self.mshape))
+TypeError: Can't broadcast (1, 400) -> (2048,)
+
+
+(52, 128)
+(89, 128)
+(67, 128)
+(16, 128)
+(62, 128)
+(67, 128)
+(88, 128)
+(64, 128)
+(6, 128)
+(66, 128)
+(45, 128)
+

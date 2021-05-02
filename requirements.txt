@@ -1,0 +1,10 @@
+torch>=1.4.0
+tensorboard>=1.14
+torchtext
+pandas 
+unidecode
+transformer==2.1.1
+nltk
+inflection
+einops
+pycocoevalcap

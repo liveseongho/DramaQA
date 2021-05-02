@@ -1,0 +1,7 @@
+## Execution Order
+
+1_extract_seg_video_from_origin_video.py
+2_extract_frames_from_seg_video.py
+3_pytorch-resnet3d/main.py
+4_extract_audio_from_seg_video.py
+5_vggish/vggish_inference_demo.py

@@ -37,6 +37,7 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
 ## Requirements
 * Python >= 3.6 (3.6 recommended)
 * PyTorch >= 1.4.0 (1.4.0 recommended)
+* transformer==2.1.1
 * tensorboard >= 1.14 (see [Tensorboard Visualization](#tensorboard-visualization))
 
 ## Directory Structure

@@ -1,4 +1,25 @@
+# ignore IDE environment files
 __pycache__
 .vscode
+.idea/
+venv/
+
+
+# ignore model, result and log
 results
 model_tvqa
+_bert
+score.py
+
+
+# ignore data directory
+data/
+
+
+# ignore data preprocess model: i3d, vggish
+preprocess_data/3_i3d/pretrained/
+*.pkl
+*.pth
+*.keymap
+preprocess_data/5_vggish/vggish_model.ckpt
+preprocess_data/5_vggish/vggish_pca_params.npz
