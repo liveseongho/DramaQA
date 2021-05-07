@@ -296,12 +296,13 @@ class MultiModalData_GPT2(Dataset):
         return data
 
     
-    def process_image(self, idx, data):
+    def process_image(self, idx, data, max_length = 80):
         text = self.text[idx]
         vid = text['vid']
-        vgg_path = '/data/dataset/AnotherMissOh/vggish/' + vid +'.npy'
-        i3d_flow_path = '/data/dataset/AnotherMissOh/i3d_flow/' + vid + '.npy'
-        i3d_rgb_path = '/data/dataset/AnotherMissOh/i3d_rgb/' + vid + '.npy'
+        vgg_path = '/data/dataset/AnotherMissOh/vggish_v0.4/' + vid +'.npy'
+        i3d_flow_path = '/data/dataset/AnotherMissOh/i3d_flow_v0.3/' + vid + '.npy'
+        i3d_rgb_path = '/data/dataset/AnotherMissOh/i3d_rgb_v0.3/' + vid + '.npy'
+
         vgg = np.load(vgg_path)
         i3d_flow = np.load(i3d_flow_path)
         i3d_rgb = np.load(i3d_rgb_path)
@@ -313,8 +314,9 @@ class MultiModalData_GPT2(Dataset):
         i3d_flow = torch.from_numpy(sample_i3d_flow).float()
         i3d_rgb = torch.from_numpy(sample_i3d_rgb).float()
         min_length = min([i3d_flow.size(0), i3d_rgb.size(0), vgg.size(0)])
+        min_length = max_length if min_length > max_length else min_length
         i3d = torch.cat([i3d_flow[:min_length], i3d_rgb[:min_length], vgg[:min_length]], dim = 1)
-        data['i3d'] = i3d        
+        data['i3d'] = i3d
         
         return data
 
