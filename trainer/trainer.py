@@ -68,8 +68,8 @@ class Trainer(BaseTrainer):
 
             # processing bounding features
             if self.bbfts:
-                bbfts_list = batch[5][0].to(self.device)
-                bbfts = self.model.align_model(bbfts_list.float()).unsqueeze(0)
+                bbfts = batch[5].squeeze(0).to(self.device)
+                bbfts = self.model.align_model(bbfts.float()).unsqueeze(0)
                 input_ids = torch.cat([bbfts, input_ids], dim = 1)
                 token_type_ids = torch.cat([torch.ones((bbfts.size(0), bbfts.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[6]), token_type_ids], dim = 1) 
 
@@ -154,8 +154,8 @@ class Trainer(BaseTrainer):
                 i3d = None
                 bbfts = None
                 if self.bbfts:
-                    bbfts_list = batch[5][0].to(self.device)
-                    bbfts = self.model.align_model(bbfts_list.float()).unsqueeze(0)
+                    bbfts = batch[5].squeeze(0).to(self.device)
+                    bbfts = self.model.align_model(bbfts.float()).unsqueeze(0)
                 if self.video:
                     i3d = batch[6].to(self.device)
 

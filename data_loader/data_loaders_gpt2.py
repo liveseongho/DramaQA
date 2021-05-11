@@ -419,8 +419,8 @@ class MultiModalData_GPT2(Dataset):
 
             i3d_labels = torch.ones((i3d.size(0), i3d.size(1))).long() * -1
             lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)
-            return input_ids, token_type_ids, lm_labels, answer_list, input_mask, bbfts_list, i3d, video_mask, reply_mask, que_list, level_list, qid_list
+            return input_ids, token_type_ids, lm_labels, answer_list, input_mask, bbfts, i3d, video_mask, reply_mask, que_list, level_list, qid_list
 
-        return input_ids, token_type_ids, lm_labels, answer_list, input_mask, bbfts_list, que_list, level_list, qid_list
+        return input_ids, token_type_ids, lm_labels, answer_list, input_mask, bbfts, que_list, level_list, qid_list
 
 
