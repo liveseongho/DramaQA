@@ -5,7 +5,7 @@ from collections import defaultdict
 import torch
 
 from utils import *
-from .preprocess_script_gpt2 import empty_sub, preprocess_text
+from .preprocess_script_gpt2 import merge_text_data, empty_sub, preprocess_text
 from .preprocess_image_gpt2 import process_video
 from .modules_language import get_tokenizer
 from .data_loaders_bert import MultiModalData_BERT
@@ -75,6 +75,8 @@ class TextData:
 #            #self.tokenizer, _ = get_tokenizer(args)
 #            self.vocab = build_word_vocabulary(self.args, self.tokenizer, self.json_data_path)
         if args['preprocess_text']:
+            # Comment(Donggeon) : If there isn't *_script.json and pickle, activate
+#           merge_text_data(args, self.json_data_path)
            if not self.args['remove_coreference']:
                preprocess_text(self.tokenizer, split_tool, self.json_data_path, self.pickle_data_path)
            else:
@@ -296,7 +298,7 @@ class MultiModalData_GPT2(Dataset):
         return data
 
     
-    def process_image(self, idx, data, max_length = 80):
+    def process_image(self, idx, data, max_length = 50):
         text = self.text[idx]
         vid = text['vid']
         vgg_path = '/data/dataset/AnotherMissOh/vggish_v0.4/' + vid +'.npy'
