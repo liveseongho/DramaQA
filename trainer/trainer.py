@@ -60,37 +60,42 @@ class Trainer(BaseTrainer):
         iteration = 0
         max_norm = 1.0
         for batch_idx, batch in enumerate(tqdm_bar):
+#            if iteration > 100:
+#                break
             input_ids = batch[0].to(self.device)
             token_type_ids = batch[1].to(self.device)
             lm_labels = batch[2].to(self.device)
             input_mask = batch[4].to(self.device)
-            input_ids = self.model.transformer.wte(input_ids)
+            input_embs = self.model.transformer.wte(input_ids)
 
             # processing bounding features
-            if self.bbfts:
-                bbfts = batch[5].squeeze(0).to(self.device)
-                bbfts = self.model.align_model(bbfts.float()).unsqueeze(0)
-                input_ids = torch.cat([bbfts, input_ids], dim = 1)
-                token_type_ids = torch.cat([torch.ones((bbfts.size(0), bbfts.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[6]), token_type_ids], dim = 1) 
-
-            if self.video: 
-                i3d = batch[6][0].to(self.device)
-                i3d = i3d.unsqueeze(0)
+            if self.bbfts or self.video:
                 video_mask = batch[7].to(self.device)
                 reply_mask = batch[8].to(self.device)
-                video_embs = self.model.video_ff(i3d) 
-                input_embs = torch.cat([video_embs, input_ids], dim=1)
-                token_type_ids = torch.cat([torch.ones((i3d.size(0), i3d.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_type_ids], dim=1)
 
                 if self.bbfts:
-                    bbfts = self.model.video_inverse_ff(bbfts)
-                    i3d = torch.cat([i3d, bbfts], dim = 1) 
-                
-                video_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[video_mask, input_mask], mode = "video")[0]
-                reply_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, i3d), attention_mask=[reply_mask, input_mask], mode = "reply")[0]
+                    bbfts = batch[5].squeeze(0).to(self.device)
+                    bbfts = self.model.align_model(bbfts.float()).unsqueeze(0)
+                    input_embs = torch.cat([bbfts, input_embs], dim = 1)
+                    token_type_ids = torch.cat([torch.ones((bbfts.size(0), bbfts.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[6]), token_type_ids], dim = 1) 
+                    video = self.model.video_inverse_ff(bbfts)
+
+                if self.video: 
+                    i3d = batch[6][0].to(self.device)
+                    i3d = i3d.unsqueeze(0)
+                    video_embs = self.model.video_ff(i3d)
+                    input_embs = torch.cat([video_embs, input_embs], dim=1)
+                    token_type_ids = torch.cat([torch.ones((i3d.size(0), i3d.size(1))).long().cuda() * self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS[-2]), token_type_ids], dim=1)
+                    if self.bbfts:
+                        video = torch.cat([i3d, video], dim = 1) 
+                    else:
+                        video = i3d 
+
+                video_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, video), attention_mask=[video_mask, input_mask], mode = "video")[0]
+                reply_loss = self.model(input_embs, token_type_ids = token_type_ids, labels=(lm_labels, video), attention_mask=[reply_mask, input_mask], mode = "reply")[0]
                 loss = (video_loss + reply_loss) / gradient_accumulation_steps
             else:
-                loss = self.model(input_embs = input_ids, token_type_ids = token_type_ids, labels = lm_labels)[0]
+                loss = self.model(input_embs = input_embs, token_type_ids = token_type_ids, labels = lm_labels)[0]
         
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)

@@ -298,7 +298,7 @@ class MultiModalData_GPT2(Dataset):
         return data
 
     
-    def process_image(self, idx, data, max_length = 50):
+    def process_image(self, idx, data, max_length = 60):
         text = self.text[idx]
         vid = text['vid']
         vgg_path = '/data/dataset/AnotherMissOh/vggish_v0.4/' + vid +'.npy'
@@ -398,29 +398,37 @@ class MultiModalData_GPT2(Dataset):
         token_type_ids = self.padding(token_type_ids_list, self.pad_token)
         lm_labels = self.padding(lm_labels_list, -1)
         input_mask = input_ids != self.pad_token
-        if self.bbfts:
-            bbfts = self.padding(bbfts_list, self.pad_token)
-            bbfts_labels = torch.ones(bbfts.size(0), bbfts.size(1)).long() * -1
-            lm_labels = torch.cat([bbfts_labels, lm_labels], dim=1)
-
-            bbfts_mask = torch.sum(bbfts != 1, dim=2) != 0
-            input_mask = torch.cat([bbfts_mask, input_mask], dim=1)
-        if self.video: 
-            i3d = self.padding(i3d_list, self.pad_token)
-            i3d_mask = torch.sum(i3d != 1, dim=2) != 0
-            input_mask = torch.cat([i3d_mask, input_mask], dim=1)
+        if self.bbfts or self.video:
+            bbfts = None
+            i3d = None
+            video_mask = None
+            reply_mask = None 
             if self.bbfts:
                 bbfts = self.padding(bbfts_list, self.pad_token)
-                bbfts_video_mask = torch.cat([torch.zeros((bbfts.size(0), bbfts.size(1))), torch.ones(input_ids.size())], 1) 
-                video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), bbfts_video_mask], 1)
-            else:
-                video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(input_ids.size())], 1)
-            reply_mask = torch.zeros(video_mask.size())
+                bbfts_mask = torch.sum(bbfts != 1, dim=2) != 0
+                input_mask = torch.cat([bbfts_mask, input_mask], dim=1)
 
-            i3d_labels = torch.ones((i3d.size(0), i3d.size(1))).long() * -1
-            lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)
+                video_mask = torch.cat([torch.zeros((bbfts.size(0), bbfts.size(1))), torch.ones(input_ids.size())], 1)
+                reply_mask = torch.zeros(video_mask.size())
+
+                bbfts_labels = torch.ones(bbfts.size(0), bbfts.size(1)).long() * -1
+                lm_labels = torch.cat([bbfts_labels, lm_labels], dim=1)
+ 
+            if self.video: 
+                i3d = self.padding(i3d_list, self.pad_token)
+                i3d_mask = torch.sum(i3d != 1, dim=2) != 0
+                input_mask = torch.cat([i3d_mask, input_mask], dim=1)
+                if self.bbfts:
+                    video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), video_mask], 1)
+                else:
+                    video_mask = torch.cat([torch.zeros((i3d.size(0), i3d.size(1))), torch.ones(input_ids.size())], 1)
+                reply_mask = torch.zeros(video_mask.size())
+    
+                i3d_labels = torch.ones((i3d.size(0), i3d.size(1))).long() * -1
+                lm_labels = torch.cat([i3d_labels, lm_labels], dim=1)
+
             return input_ids, token_type_ids, lm_labels, answer_list, input_mask, bbfts, i3d, video_mask, reply_mask, que_list, level_list, qid_list
-
-        return input_ids, token_type_ids, lm_labels, answer_list, input_mask, bbfts, que_list, level_list, qid_list
+        else:
+            return input_ids, token_type_ids, lm_labels, answer_list, input_mask, que_list, level_list, qid_list
 
 

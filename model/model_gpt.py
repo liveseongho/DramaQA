@@ -261,7 +261,7 @@ class VideoGPT2LMHeadModel(GPT2PreTrainedModel):
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.video_ff = nn.Linear(4224, config.n_embd)
         self.video_inverse_ff = nn.Linear(config.n_embd, 4224)
-        self.align_model = nn.Linear(512, 768)
+        self.align_model = nn.Linear(512, config.n_embd)
 
         self.init_weights()
         self.tie_weights()

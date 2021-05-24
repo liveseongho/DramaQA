@@ -81,9 +81,9 @@ def main(config):
                 level = batch[10][0]
                 qid = batch[11][0]
             else: 
-                que = batch[6][0][0]
-                level = batch[7][0]
-                qid = batch[8][0]
+                que = batch[5][0][0]
+                level = batch[6][0]
+                qid = batch[7][0]
             output = {}
             target = batch[3][0]
             pred = sample_sequence(model, input_ids, token_type_ids, tokenizer, device, video=i3d, bbfts = bbfts)
