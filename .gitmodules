@@ -1,0 +1,3 @@
+[submodule "bleurt"]
+	path = bleurt
+	url = https://github.com/google-research/bleurt
