@@ -23,3 +23,7 @@ preprocess_data/3_i3d/pretrained/
 *.keymap
 preprocess_data/5_vggish/vggish_model.ckpt
 preprocess_data/5_vggish/vggish_pca_params.npz
+
+
+# ignore Oscar dir
+Oscar/

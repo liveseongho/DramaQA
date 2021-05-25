@@ -29,19 +29,19 @@ Usage:
   # Run a WAV file through the model and print the embeddings. The model
   # checkpoint is loaded from vggish_model.ckpt and the PCA parameters are
   # loaded from vggish_pca_params.npz in the current directory.
-  $ python vggish_inference_demo.py --wav_file /path/to/a/wav/file
+  $ python 5_get_vggish.py --wav_file /path/to/a/wav/file
 
   # Run a WAV file through the model and also write the embeddings to
   # a TFRecord file. The model checkpoint and PCA parameters are explicitly
   # passed in as well.
-  $ python vggish_inference_demo.py --wav_file /path/to/a/wav/file \
+  $ python 5_get_vggish.py --wav_file /path/to/a/wav/file \
                                     --tfrecord_file /path/to/tfrecord/file \
                                     --checkpoint /path/to/model/checkpoint \
                                     --pca_params /path/to/pca/params
 
   # Run a built-in input (a sine wav) through the model and print the
   # embeddings. Associated model files are read from the current directory.
-  $ python vggish_inference_demo.py
+  $ python 5_get_vggish.py
 """
 
 from __future__ import print_function
@@ -63,6 +63,8 @@ CHECKPOINT = 'vggish_model.ckpt'
 config = json.load(open('../preprocess_config.json', 'r', encoding='utf-8'))
 segmented_audio_dir = config['segmented_audio_dir']
 vggish_dir = config['vggish_dir']
+
+print('-' * 120 + '\n{}\nto\n{}\n'.format(segmented_audio_dir, vggish_dir) + '-' * 120)
 
 
 os.makedirs(vggish_dir, exist_ok=True)
@@ -88,17 +90,18 @@ def main(_):
         for idx, wav_file in enumerate(sorted(glob.glob(segmented_audio_dir + '*.wav'))):
 
             batch = vggish_input.wavfile_to_examples(wav_file)
-            if batch.shape[0] == 0:
-                print('batch:', batch.shape)
-                print(batch)
 
+    
+            # print('batch.shape:', batch.shape)
+            # if idx == 0:
+            #     print(batch)
             # Run inference and postprocessing.
             [embedding_batch] = sess.run([embedding_tensor],
                                          feed_dict={features_tensor: batch})
 
             # print('embedding_batch:', embedding_batch.shape)
             postprocessed_batch = pproc.postprocess(embedding_batch)
-            # print('postprocessed_batch:', postprocessed_batch.shape)
+            # print('shape of vggish output:', postprocessed_batch.shape)
 
             npy_path = vggish_dir + \
                         wav_file.split('/')[-1].replace('.wav', '.npy')
