@@ -53,7 +53,7 @@ args = parser.parse_args()
 
 
 
-config = json.load(open('../preprocess_config.json', 'r', encoding='utf-8'))
+config = json.load(open('preprocess_config.json', 'r', encoding='utf-8'))
 
 max_clip_number = config['max_clip_number']
 

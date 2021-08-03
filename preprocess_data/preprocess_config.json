@@ -1,14 +1,14 @@
 {
   "root_dir"            : "/data/dataset/AnotherMissOh/",
   "original_video_dir"  : "/data/dataset/AnotherMissOh/videos/",
-  "segmented_video_dir" : "/data/dataset/AnotherMissOh/segmented_video/",
+  "segmented_video_dir" : "/data/dataset/AnotherMissOh/segmented_video_v6/",
   "shot_info_dir"       : "/data/dataset/AnotherMissOh/AnotherMissOh_Shotinfo_v2/",
-  "frame_dir"           : "/data/dataset/AnotherMissOh/frame_v0.2/",
-  "i3d_rgb_dir"         : "/data/dataset/AnotherMissOh/i3d_rgb_v0.3",
-  "i3d_flow_dir"        : "/data/dataset/AnotherMissOh/i3d_flow_v0.3",
+  "frame_dir"           : "/data/dataset/AnotherMissOh/frame_v6/",
+  "i3d_rgb_dir"         : "/data/dataset/AnotherMissOh/i3d_rgb_v6",
+  "i3d_flow_dir"        : "/data/dataset/AnotherMissOh/i3d_flow_v6",
 
-  "segmented_audio_dir" : "/data/dataset/AnotherMissOh/segmented_audio_v0.4/",
-  "vggish_dir"          : "/data/dataset/AnotherMissOh/vggish_v0.4/",
+  "segmented_audio_dir" : "/data/dataset/AnotherMissOh/segmented_audio_v6/",
+  "vggish_dir"          : "/data/dataset/AnotherMissOh/vggish_v6/",
 
   "max_clip_number"     : 32,
   "max_img_number"      : 640

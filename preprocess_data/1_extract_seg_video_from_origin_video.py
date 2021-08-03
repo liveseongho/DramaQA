@@ -7,7 +7,7 @@ from moviepy.editor import VideoFileClip
 
 config = json.load(open('preprocess_config.json', 'r', encoding='utf-8'))
 root_dir = config['root_dir']
-original_video_dir = config['origin_video_dir']
+original_video_dir = config['original_video_dir']
 segmented_video_dir = config['segmented_video_dir']
 shot_info_dir = config['shot_info_dir']
 
@@ -37,18 +37,56 @@ vid_shots_dict = dict()
 # vid_shots_dict[vid] = shot_contained 꼴로 저장. shot_contained는 길이 1 또는 2의 int list
 # e.g. vid_shots_dict['AnotherMissOh09_001_0000'] = [56, 81]
 
-with open(os.path.join(root_dir, 'AnotherMissOh_QA/AnotherMissOhQA_total_set.json')) as f:
-    qa_datum = json.load(f)
+QA_filelist = [
+    'AnotherMissOhQA_train_set.json',
+    'AnotherMissOhQA_val_set.json',
+    'AnotherMissOhQA_test_set.json',
+]
 
+
+"""이 부분은 임시"""
+
+old_set = set()
+cur_set = set()
+
+with open(os.path.join(root_dir, 'AnotherMissOh_QA/', 'AnotherMissOhQA_total_set_old.json')) as f:
+    qa_datum = json.load(f)
+    
     for qa_data in qa_datum:
         vid = qa_data['vid']
         shots = qa_data['shot_contained']
-        vid_shots_dict[vid] = shots
+        # vid_shots_dict_old[vid] = shots
+        old_set.add(vid)
+
+print('len(old_set):', len(old_set))
+"""여기까지 임시"""
+
+
+
+for filename in QA_filelist:
+    
+    with open(os.path.join(root_dir, 'AnotherMissOh_QA/', filename)) as f:
+        qa_datum = json.load(f)
+    
+        for qa_data in qa_datum:
+            vid = qa_data['vid']
+            if vid in old_set:
+                continue
+            shots = qa_data['shot_contained']
+            vid_shots_dict[vid] = shots
+            cur_set.add(vid)
+
+print('len(cur_set):', len(cur_set))
+
+print('len(old_set - cur_set):', len(old_set - cur_set))
+print('len(cur_set - old_set):', len(cur_set - old_set))
 
 # 여기까지 수정
 #------------------------------------------------------------------------------------------------#
         
 print('Total vids number:', len(vid_shots_dict))
+# print('\n', vid_shots_dict)
+# import sys;   sys.exit(0)
 
 def time_to_float(t, fps, start=False):
     x = time.strptime(t.split(';')[0],'%H:%M:%S')

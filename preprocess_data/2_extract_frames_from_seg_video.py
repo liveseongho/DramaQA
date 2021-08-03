@@ -43,9 +43,9 @@ for idx, video_path in enumerate(sorted(glob.glob(segmented_video_dir + '*.mp4')
 
         if frame_number in extract_list:
             root_path = frame_dir + 'AnotherMissOh{}/{}/{}/'.format(episode, scene, shot)
-            # os.makedirs(root_path, exist_ok=True)
-            # path = root_path + 'IMAGE_{:010}.jpg'.format(frame_number)
-            # cv2.imwrite(path, frame)
+            os.makedirs(root_path, exist_ok=True)
+            path = root_path + 'IMAGE_{:010}.jpg'.format(frame_number)
+            cv2.imwrite(path, frame)
 
             count += 1
 
@@ -53,7 +53,7 @@ for idx, video_path in enumerate(sorted(glob.glob(segmented_video_dir + '*.mp4')
     
 
     print('{}, {}: {} frames saved'.format(idx, mp4name, count))
-    if idx>10:
-        break
+    # if idx>10:
+    #     break
 
 
