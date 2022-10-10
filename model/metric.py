@@ -56,3 +56,6 @@ def accuracy_diff3(output, target, difficulties):
 
 def accuracy_diff4(output, target, difficulties):
     return accuracy_diffN(output, target, difficulties, 4)
+
+def accuracy_diff5(output, target, difficulties):
+    return accuracy_diffN(output, target, difficulties, 5)

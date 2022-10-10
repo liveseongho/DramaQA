@@ -2,11 +2,13 @@ from collections import defaultdict
 
 from PIL import Image
 from tqdm import tqdm
+import gc
 
 import torch
 from torch import nn, utils
 from torchvision import models, transforms
 from utils import *
+from os.path import isfile
 
 from .modules_vision import VisionDataset
 
@@ -32,12 +34,12 @@ def get_model(args):
 
     return extractor
 
-def preprocess_images(args):
+def preprocess_images(args, visuals):
     #print('Loading visual')
-    visuals = load_visual(args)
 
     image_path = Path(args['image_path'])
-    cache_dir = Path(image_path) / 'cache'
+    #cache_dir = Path(image_path) / 'cache'
+    cache_dir = Path(args['image_cache_path'])
     if not cache_dir.is_dir():
         cache_dir.mkdir()
 
@@ -69,9 +71,9 @@ def preprocess_images(args):
         ])
         model = get_model(args)
         episode_paths = list(image_path.glob('*'))
+
         for e in tqdm(episode_paths, desc='Episode'):
             shot_paths = list(e.glob('*/*'))  # episode/scene/shot
-
             # Load image and flatten
             images = load_images(shot_paths)
             images = {"{}{}{}".format(vid, delimiter, name): image for vid, shots in images.items() for name, image in shots.items()}
@@ -85,14 +87,16 @@ def preprocess_images(args):
                 #    episode_total.update(episode_part)
 
             del images, dataset # delete data to retrieve memory
+            gc.collect()
         del model # delete extractor model to retrieve memory
+        gc.collect()
 
         if args['save_cache']:
             for key, path in not_cached.items():
                 print("Saving %s feature cache as %s" % (key, path))
                 save_pickle(features[key], path)
 
-    return features, visuals
+    return features
 
 def load_images(shot_paths):
     """
@@ -117,7 +121,6 @@ def load_image(shot_path):
         ...
     }
     """
-
     image_paths = shot_path.glob('*')
     vid = '_'.join(shot_path.parts[-3:])
     res = {}
@@ -290,7 +293,6 @@ def extract_features(args, dataset, model):
                         features['full_image'][scene_id][vid] = defaultdict(dict)
                         features['full_image'][scene_id][vid][f] = fi
 
-
             if 'person_full' in not_cached:
                 person_fulls = [extract_and_pool(pfu, model, device) for pfu in data['person_full']]
                 for (scene_id, vid, e, f), pfu in zip(keys, person_fulls):
@@ -306,17 +308,133 @@ def extract_features(args, dataset, model):
                         features['person_full'][scene_id][vid][f] = pfu
 
     del dataloader
+    gc.collect()
 
     return features
 
 
-def process_video(args, save_path, speaker_index, vocab):
+def process_video(args, save_path, feature_path, speaker_index, vocab):
     pad_index = vocab.get_index(pad_token)
+    none_index = speaker_index['None']
+
+    visuals = load_visual(args)
+    if isfile(feature_path):
+        features = load_pickle(feature_path)
+    else:
+        print("saving processed_video ...")
+        features = preprocess_images(args, visuals)
+        save_pickle(features, feature_path)
+
+    """
+    {
+        full_image:   full_image (tensor of shape (512,)),
+        person_list:      [[person1_id_idx, behavior1_idx, emotion1_idx], ...],
+        person_fulls: [person_full1 (tensor of shape (512,)), ... ]
+    }
+    """
+    full_images = features['full_image']
+    person_fulls = features['person_full']
+
+    new_visuals = defaultdict(dict)
+    for i in range(1, 19):
+        for key, value in visuals[i].items():
+            frame_id = value['frame_id']
+            scene_id = frame_id[:19]
+            vid = frame_id[:24]
+            f = get_frame_id(frame_id)
+
+
+            if scene_id in new_visuals:
+                if vid in new_visuals[scene_id]:
+                    new_visuals[scene_id][vid][f] = value
+                else:
+                    new_visuals[scene_id][vid] = defaultdict(dict)
+                    new_visuals[scene_id][vid][f] = value
+            else:
+                new_visuals[scene_id] = defaultdict(dict)
+                new_visuals[scene_id][vid] = defaultdict(dict)
+                new_visuals[scene_id][vid][f] = value
+    visuals = new_visuals
+
+    for scene_vid, vid_dict in full_images.items():
+        for vid, frames in vid_dict.items():
+            for key, value in frames.items():
+                frames[key] = {
+                    'full_image': value,
+                    'person_list': [],
+                    'person_fulls': [],
+                    'object_list': [],
+                    'place' : ''
+                }
+                if vid not in visuals[scene_vid] or key not in visuals[scene_vid][vid]:
+                    continue
+
+                visual = visuals[scene_vid][vid][key]
+                processed_p = frames[key]['person_list']
+
+                for person in visual["persons"]:
+                    person_id = person['person_id'].title()
+                    person_id_idx = none_index if person_id == '' else speaker_index[person_id]  # none -> None
+
+                    person_info = person['person_info']
+
+                    behavior = person_info['behavior'].lower()
+                    behavior_idx = pad_index if behavior == '' else vocab.get_index(behavior.split()[0])
+
+                    emotion = person_info['emotion'].lower()
+                    emotion_idx = pad_index if emotion == '' else vocab.get_index(emotion)
+
+                    if len(person['related_objects']) > 0:
+                        related_obj_id = person['related_objects'][0]['related_object_id'].lower()
+                        related_obj_id_idx = vocab.get_index(related_obj_id)
+                        relation = person['person_info']['predicate'].lower()
+                        relation_idx = vocab.get_index(relation)
+                    else:
+                        related_obj_id_idx = pad_index
+                        relation_idx = pad_index
+
+                    processed = [person_id_idx, behavior_idx, emotion_idx, related_obj_id_idx, relation_idx] # Don't convert visual to a tensor yet
+                    processed_p.append(processed)
+
+                if processed_p:
+                    frames[key]['person_fulls'] = list(person_fulls[scene_vid][vid][key])
+
+                obj_list = list()
+                for obj in visual["objects"]:
+                    obj_id = obj['object_id']
+                    obj_id_idx = vocab.get_index(obj_id)
+                    obj_list.append(obj_id_idx)
+
+                frames[key]['object_list'] = obj_list
+                frames[key]['place'] = pad_index if visual['place'] == '' else vocab.get_index(visual['place'])
+
+    vids_list = list()
+    qa_paths = {m: Path(args['qa_path']) / 'AnotherMissOhQA_{}_set.json'.format(m) for m in modes}
+    qa_set = list()
+
+    for mode in modes:
+        qa_set.append(read_json(qa_paths[mode]))
+
+    for i, set_og in enumerate(qa_set):
+        vids_l = set()
+        for d in set_og:
+            vids_l.add(d['vid'][:-5])
+        vids_list.append(vids_l)
+
+    train_vids, val_vids, test_vids = vids_list
+    scene_vids = {'train': vids_list[0], 'val': vids_list[1], 'test': vids_list[2]}
+
+    full_images_by_modes = {mode: {k: full_images[k] for k in scene_vids[mode]} for mode in modes}
+    for mode in modes:
+        save_pickle(full_images_by_modes[mode], save_path[mode])
+
+
+def process_video_gpt(args, save_path, speaker_index, pad_index, tokenizer):
     none_index = speaker_index['None']
 
     print("saving processed_video ...")
     features, visuals = preprocess_images(args)
-
+    #print('features : ', features)
     """
     {
         full_image:   full_image (tensor of shape (512,)),
@@ -364,15 +482,15 @@ def process_video(args, save_path, speaker_index, vocab):
 
                 for person in visual["persons"]:
                     person_id = person['person_id'].title()
-                    person_id_idx = none_index if person_id == '' else speaker_index[person_id]  # none -> None
+                    person_id_idx = none_index if person_id == '' else tokenizer.convert_tokens_to_ids(person_id)  # none -> None
 
                     person_info = person['person_info']
 
                     behavior = person_info['behavior'].lower()
-                    behavior_idx = pad_index if behavior == '' else vocab.get_index(behavior.split()[0])
+                    behavior_idx = pad_index if behavior == '' else tokenizer.convert_tokens_to_ids(behavior.split()[0])
 
                     emotion = person_info['emotion'].lower()
-                    emotion_idx = pad_index if emotion == '' else vocab.get_index(emotion)
+                    emotion_idx = pad_index if emotion == '' else tokenizer.convert_tokens_to_ids(emotion)
 
                     processed = [person_id_idx, behavior_idx, emotion_idx] # Don't convert visual to a tensor yet
                     processed_p.append(processed)
@@ -395,10 +513,19 @@ def process_video(args, save_path, speaker_index, vocab):
 
     train_vids, val_vids, test_vids = vids_list
     scene_vids = {'train': vids_list[0], 'val': vids_list[1], 'test': vids_list[2]}
+#    train_vids, val_vids = vids_list
+#    scene_vids = {'train': vids_list[0], 'val': vids_list[1]}
 
+    # for Vip
+#    full_images_by_modes = {mode: {k: full_images[k] for k in scene_vids[mode]} for mode in modes}
+#    full_images = {}
+#    for mode in modes:
+#        full_images.update(full_images_by_modes[mode])
+#    save_pickle(full_images, save_path)
+
+    # for Open-ended
     full_images_by_modes = {mode: {k: full_images[k] for k in scene_vids[mode]} for mode in modes}
     for mode in modes:
         save_pickle(full_images_by_modes[mode], save_path[mode])
-
 
 

@@ -8,11 +8,11 @@ import numpy as np
 import data_loader.data_loaders as module_data
 import model.loss as module_loss
 import model.metric as module_metric
-# import model.mdam as module_model
-# import model_tvqa.tvqa_abc as module_model
+#import model.mdam as module_model
+#import model_tvqa.tvqa_abc as module_model
 import model.model as module_model
 # import model.model_bert as module_model
-# import model.baseline as module_model
+#import model.baseline as module_model
 from parse_config import ConfigParser
 from trainer import Trainer
 

@@ -46,6 +46,7 @@ class Trainer(BaseTrainer):
             # data, target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
             output = self.model(data)
+
             loss = self.criterion(output, target)
 
             loss.backward()

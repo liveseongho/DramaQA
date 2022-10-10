@@ -5,7 +5,7 @@ from base import BaseModel
 from torch.autograd import Variable
 
 from . mlp import MLP
-from . rnn import RNNEncoder, mean_along_time
+from . rnn import RNNEncoder, mean_along_time, max_along_time
 from transformers import BertConfig, BertModel
 
 
@@ -36,7 +36,7 @@ class LongestAnswer(BaseModel):
         super().__init__()
 
     def forward(self, x):
-        al = x['ans_len']
+        al = x['ans_l']
 
         return al
 
@@ -46,7 +46,7 @@ class ShortestAnswer(BaseModel):
         super().__init__()
 
     def forward(self, x):
-        al = 1/x['ans_len']
+        al = 1/x['ans_l']
 
         return al
 
@@ -58,10 +58,10 @@ class QABert(BaseModel):
 
         self.sent_embedder = BertModel.from_pretrained('bert-base-cased')
         for param in self.sent_embedder.parameters():
-            param.requires_grad = True
-        self.distil2imsize = nn.Linear(768, D)
+            param.requires_grad = False
         self.dim_reduce = nn.Linear(768, 300)
-        self.get_score = MLP(300, 1, [100], 2)
+        self.get_score = nn.Linear(300, 1)
+        #self.get_score = MLP(300, 1, [100], 2)
 
     def bert_encoder(self, sentence_dict, dict_l):
         B = sentence_dict['input_ids'].shape[0]
@@ -71,8 +71,12 @@ class QABert(BaseModel):
         input_ids = sentence_dict['input_ids']
         attention_mask = sentence_dict['attention_mask']
         token_type_ids = sentence_dict['token_type_ids']
+
         o = self.sent_embedder(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)[0]
-        o = mean_along_time(self.dim_reduce(o.view(B, T1, o.shape[-1])), dict_l)
+        #print(o.shape)
+        # o = o.view(B, T1, o.shape[-1])[:,0,:]
+        #print(o.shape)
+        o = max_along_time(self.dim_reduce(o.view(B, T1, o.shape[-1])), dict_l)
         return o
 
     def forward(self, x):
@@ -81,11 +85,10 @@ class QABert(BaseModel):
         B = qas_dict[0]['input_ids'].shape[0]
         e_qas = [self.bert_encoder(qas_d, qas_l[i]) for i, qas_d in enumerate(qas_dict)]
 
-        #e_qas = [self.get_score(torch.mean(emb, dim=1)) for emb in e_qas]
         e_qas = [self.get_score(emb) for emb in e_qas]
         e_qas = torch.stack(e_qas, 0).transpose(0, 1).squeeze()
 
-        return e_qas.view (B, -1)
+        return e_qas.view(B, -1)
 
 
 class RNNMLP(BaseModel):
@@ -104,7 +107,7 @@ class RNNMLP(BaseModel):
 
         qa = [x['qa'].transpose(0, 1)[i] for i in range(5)]
         qa_l = [x['qa_l'].transpose(0, 1)[i] for i in range(5)]
-        sub, sub_l = x['filtered_sub'], x['filtered_sub_len']
+        sub, sub_l = x['sub'], x['sub_l']
 
         bbfts, bbfts_l = x['bbfts'], x['bbfts_l']
 
@@ -119,7 +122,7 @@ class RNNMLP(BaseModel):
 
         concat = torch.stack([torch.cat([e_qa[i], sub, vis], dim=1) for i in range(5)], dim=1)
 
-        final_score = self.mlp(concat).squeeze()
+        final_score = self.mlp(concat).view(bbfts.shape[0], 5)
 
 
         return final_score
@@ -162,7 +165,7 @@ class MemN2N(BaseModel):
         self.embedding = nn.Embedding(V, D).requires_grad_(False)
         self.memnet = MemNet()
         self.linear_sub = nn.Linear(D, D)
-        self.linear_vis = nn.Linear(3*D + 512, D)
+        self.linear_vis = nn.Linear(5*D+512, D)
 
     def sentence_embedding(self, story, story_l, story_l_l):
         story = story.view(-1, story.shape[2], story.shape[3])
@@ -194,6 +197,7 @@ class MemN2N(BaseModel):
         vis = self.embedding(vmeta)
         vis = vis.view(bbfts.shape[0], bbfts.shape[1], bbfts.shape[2], -1)
         vis = torch.cat([vis, bbfts], dim=3)
+        #vis = bbfts
 
         vis = self.linear_vis(vis)
         vis = self.sentence_embedding(vis, bbfts_l, bbfts_l_l)

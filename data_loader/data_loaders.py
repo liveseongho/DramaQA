@@ -9,6 +9,7 @@ from .preprocess_script import empty_sub, build_word_vocabulary, preprocess_text
 from .preprocess_image import process_video
 from .modules_language import get_tokenizer
 from .data_loaders_bert import MultiModalData_BERT
+#from .data_loaders_desc import MultiModalData_desc
 import os
 import numpy as np
 from pathlib import Path
@@ -63,11 +64,13 @@ class TextData:
             if not self.args['remove_coreference']:
                 preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.pickle_data_path)
             else:
-                preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.nc_data_path)
+                preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.nc_data_path, remove_c=True)
 
         # load data
         if not self.args['remove_coreference']:
             print("Loading processed dataset from path: %s." % self.pickle_data_path[mode])
+            #self.tokenizer, _ = get_tokenizer(args)
+            #preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.pickle_data_path)
             self.data = load_pickle(self.pickle_data_path[mode])
         else:
             print("Loading processed dataset from path: %s." % self.nc_data_path[mode])
@@ -125,30 +128,35 @@ class ImageData:
         self.vocab = vocab
         self.pad_index = vocab.get_index(pad_token)
         self.none_index = speaker_index['None']
-        self.visual_pad = [self.none_index, self.pad_index, self.pad_index]
+        self.visual_pad = [self.none_index, self.pad_index, self.pad_index, self.pad_index, self.pad_index]
 
         self.image_path = args['image_path']
+        self.image_cache_path = args['image_cache_path']
         self.image_dim = args['image_dim']
+        self.image_feature_path = args['image_feature']
 
-        self.processed_video_path = self.get_processed_video_path(self.image_path)
+        self.processed_video_path = self.get_processed_video_path(self.image_cache_path)
         if not os.path.isfile(self.processed_video_path[mode]):
-            process_video(args, self.processed_video_path, speaker_index, vocab)
+            process_video(args, self.processed_video_path, self.image_feature_path, speaker_index, vocab)
 
         print("Loading processed video input from path: %s." % self.processed_video_path[mode])
         self.image_dt = load_pickle(self.processed_video_path[mode])
 
     def get_processed_video_path(self, image_path):
-        return {m: Path(image_path) / 'cache' / ('processed_video_' + m + '.pickle') for m in modes}
+        return {m: Path(image_path)/ ('processed_video_' + m + '.pickle') for m in modes}
 
     def get_bbft(self, vid, flatten=False):
         bb_features = []
         visual_graphs = []
+        objs_and_place = []
 
         shot = get_shot_id(vid)
         shot_contained = self.image_dt[vid[:19]] if shot == 0 else {vid[:24]: self.image_dt[vid[:19]][vid[:24]]}
 
         max_frame_per_shot = self.args['max_frame_per_shot']
         max_shot_per_scene = self.args['max_shot_per_scene']
+        max_obj_per_shot = self.args['max_obj_per_shot']
+
 
         shot_num = 1
         for shot_vid, shot in shot_contained.items():
@@ -157,8 +165,10 @@ class ImageData:
             shot_num = shot_num + 1
             bb_feature = []
             vis_graph = []
+            obj_and_place = []
 
             frame_num = 1
+            obj_num = 0
             # if len(shot.keys()) > max_frame_per_shot:
             #    np.random.uniform(0, len(shot.keys()), max_frame_per_shot)
             # TODO: frame sampling
@@ -170,17 +180,28 @@ class ImageData:
                     bb_feature.extend([frame['full_image']])
                 else:
                     bb_feature.extend(frame['person_fulls'])
-                vis_graph.extend(frame['persons'])
+                vis_graph.extend(frame['person_list'])
+                if obj_num + len(frame['object_list']) < max_obj_per_shot:
+                    obj_and_place.extend(frame['object_list'][:max_obj_per_shot - obj_num])
+                    obj_num = obj_num + len(frame['object_list'])
+
+                if frame['place'] == '':
+                    obj_and_place.extend([self.pad_index])
+                else:
+                    obj_and_place.extend([frame['place']])
 
             if not bb_feature:
                 vis_graph = self.visual_pad
                 bb_feature = [np.zeros(self.image_dim)]
+            if not obj_and_place:
+                obj_and_place = [self.pad_index]
             bb_feature = np.reshape(np.concatenate(bb_feature), (-1))
             vis_graph = np.reshape(vis_graph, (-1))
             bb_features.append(bb_feature)
             visual_graphs.append(vis_graph)
+            objs_and_place.append(obj_and_place)
 
-        return bb_features, visual_graphs
+        return bb_features, visual_graphs, objs_and_place
 
 
 class MultiModalData(Dataset):
@@ -223,7 +244,6 @@ class MultiModalData(Dataset):
         subtitle = text['subtitle']
         correct_idx = text['correct_idx'] if self.mode != 'test' else None
         q_level_logic = text['q_level_logic']
-
         vid = text['vid']
 
         data = {
@@ -271,16 +291,18 @@ class MultiModalData(Dataset):
         visual_types = ['shot', 'frame']
         assert self.args['visual_type'] in visual_types, "visual_typoe should be %s." % (' or '.join(visual_types))
 
-        vfeatures, vmetas = self.image.get_bbft(vid)
+        vfeatures, vmetas, vobjplace = self.image.get_bbft(vid)
 
         if self.args['visual_type'] == 'frame':
             # vfeatures: [(num_frames*512), (num_frames*512), ...]
             # vmetas: [(num_frames*3*512), ...]
             vfeatures = np.concatenate(vfeatures, axis=0)
             vmetas = np.concatenate(vmetas, axis=0)
+            vobjplace = np.concatenate(vobjplace, axis=0)
 
         data['bbfts'] = vfeatures
         data['vgraphs'] = vmetas
+        data['vobjplace'] = vobjplace
 
         # currently not tensor yet
         return data
@@ -329,14 +351,24 @@ class MultiModalData(Dataset):
             bbfts, bbfts_l = pad2d(collected['bbfts'], 0, float_dtype, reshape3d=True, last_dim=self.image_dim)
             bbfts_l_l = None
             vgraphs, vgraphs_l = pad2d(collected['vgraphs'], self.image.visual_pad, int_dtype)
+            vobjs, vobjs_l = None, None#pad2d(collected['vobjplace'], self.image.visual_pad, int_dtype)
+
+            vobjs_l_l = None
         elif self.args['visual_type'] == 'shot':
             bbfts, bbfts_l, bbfts_l_l = pad3d(collected['bbfts'], 0, float_dtype, reshape4d=True, last_dim=self.image_dim)
-            vgraphs, vgraphs_l, _ = pad3d(collected['vgraphs'], self.image.visual_pad, int_dtype, reshape4d=True, last_dim=3)
+            vgraphs, vgraphs_l, vgraphs_l_l = pad3d(collected['vgraphs'], self.image.visual_pad, int_dtype, reshape4d=True, last_dim=5)
+
+            vobjs, vobjs_l, vobjs_l_l = pad3d(collected['vobjplace'], self.pad_index, int_dtype)
+
 
         data['bbfts'] = bbfts
         data['bbfts_l'] = bbfts_l
         data['bbfts_l_l'] = bbfts_l_l
         data['vmeta'] = vgraphs
+        data['vobjs'] = vobjs
+        data['vobjs_l'] = vobjs_l
+        data['vobjs_l_l'] = vobjs_l_l
+
 
         # currently not in the device yet
         return data
@@ -346,8 +378,8 @@ class DramaQADataLoader(BaseDataLoader):
     def __init__(self, mode, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True, vocab=None, **kwargs):
         if kwargs['bert']:
             dataset = MultiModalData_BERT(kwargs, mode=mode)
+            self.vocab = dataset.vocab
         else:
             dataset = MultiModalData(kwargs, mode=mode)
-
-        self.vocab = dataset.vocab
+            self.vocab = dataset.vocab
         super().__init__(dataset, batch_size, shuffle, validation_split, num_workers, dataset.collate_fn)

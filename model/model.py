@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from base import BaseModel
 
 from . rnn import RNNEncoder, max_along_time, mean_along_time
-from . modules import ContextMatching
+from . modules import ContextMatching, LinearLayer
 
 
 class MCM(BaseModel):
@@ -41,16 +41,12 @@ class MCM(BaseModel):
         #self.cf_qa = nn.Sequential(nn.Linear(D, clf_dim), nn.Softmax(dim=2))
         #self.final_clf = nn.Linear(clf_dim, 1)
 
-        if not self.remove_coreference:
-            self.bilstm_subs = RNNEncoder(321, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
-        else:
-            self.bilstm_subs = RNNEncoder(300, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
+
+        self.bilstm_subs = RNNEncoder(321, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
         if self.opts['subs_low'] or self.opts['subs_high']:
             self.cmat_subs = ContextMatching(2*D)
-            if not self.remove_coreference:
-                self.conv_pool_subs = Conv1d(D*3+2, D*2)
-            else:
-                self.conv_pool_subs = Conv1d(D*3+1, D*2)
+
+            self.conv_pool_subs = Conv1d(D*3+2, D*2)
             self.clf_subs = nn.Sequential(nn.Linear(D*2, 1), nn.Softmax(dim=1))
         '''
         if self.opts['subs_high']:
@@ -61,13 +57,18 @@ class MCM(BaseModel):
         '''
 
         if not self.remove_metadata:
-            self.bilstm_bbfts = RNNEncoder(D*2+21, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
+            self.vlinear = LinearLayer(visual_dim,
+                                    300,
+                                    layer_norm=True,
+                                    dropout=0.1,
+                                    relu=True)
+            self.bilstm_bbfts = RNNEncoder(D+21, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
         else:
             self.bilstm_bbfts = RNNEncoder(visual_dim, 150, bidirectional=True, dropout_p=dropout_p, n_layers=1, rnn_type="lstm", return_hidden=False)
         if self.opts['visual_low'] or self.opts['visual_high']:
             self.cmat_bbfts = ContextMatching(2*D)
             if not self.remove_metadata:
-                self.conv_pool_bbfts = Conv1d(D*3+1, D*2)
+                self.conv_pool_bbfts = Conv1d(D*3+2, D*2)
             else:
                 self.conv_pool_bbfts = Conv1d(D*3, D*2)
             self.clf_bbfts = nn.Sequential(nn.Linear(D*2, 1), nn.Softmax(dim=1))
@@ -81,7 +82,7 @@ class MCM(BaseModel):
         '''
         self.character = nn.Parameter(torch.randn(22, D, dtype=torch.float), requires_grad=True)
 
-    def forward(self, x):
+    def forward(self, x, qual=False):
         B = x['qa'].shape[0]
         #q, q_len = x['que'], x['que_l']
         qas, qas_l = x['qa'], x['qa_l']
@@ -132,10 +133,19 @@ class MCM(BaseModel):
 
         subs_idx = self._to_one_hot(subs, self.V, mask=subs_len, type3d=True)
         subs_idx = subs_idx.view(B, -1, subs_idx.shape[-1])
-        qas_idx = [qas_idx[i].unsqueeze(1).expand(-1, subs_idx.shape[1], -1) for i in range(5)]
-        subs_qa_flag = [torch.sum(subs_idx*qas_idx[i], dim=2) for i in range(5)]
+        qas_idx_sub = [qas_idx[i].unsqueeze(1).expand(-1, subs_idx.shape[1], -1) for i in range(5)]
+        subs_qa_flag = [torch.sum(subs_idx*qas_idx_sub[i], dim=2) for i in range(5)]
         subs_qa_flag = [(subs_qa_flag[i] > 0).type(torch.cuda.FloatTensor).unsqueeze(2) for i in range(5)]
         subs = self.embedding(subs) # (B, T, max_w, 300)
+
+
+        objs, objs_len = x['vobjs'], x['vobjs_l_l']
+        objs_idx = self._to_one_hot(objs, self.V, mask=objs_len, type3d=True)
+        objs_idx = objs_idx.view(B, -1, objs_idx.shape[-1])
+        qas_idx_obj= [qas_idx[i].unsqueeze(1).expand(-1, objs_idx.shape[1], -1) for i in range(5)]
+        objs_qa_flag = [torch.sum(objs_idx*qas_idx_obj[i], dim=2) for i in range(5)]
+        objs_qa_flag = [(objs_qa_flag[i] > 0).type(torch.cuda.FloatTensor).unsqueeze(2) for i in range(5)]
+        objs_qa_flag = [torch.sum(objs_qa_flag[i].reshape(B, objs.shape[1], objs.shape[2]), dim=2) for i in range(5)]
 
         # Embed speaker
 
@@ -151,10 +161,15 @@ class MCM(BaseModel):
 
             c_subs = self.stream_context(subs_spk, subs_len, self.bilstm_subs)
         else:
-            spk_flag = None
-            c_subs = self.stream_context(subs, subs_len, self.bilstm_subs)
+            spk_onehot = torch.zeros((B,N_sentence,N_word,21)).type(torch.cuda.FloatTensor)
+            subs_spk = torch.cat([subs, spk_onehot], dim=3)
+            spk_flag = [torch.zeros((B,N_sentence*N_word,1)).type(torch.cuda.FloatTensor) for i in range(5)]
+
+            c_subs = self.stream_context(subs_spk, subs_len, self.bilstm_subs)
 
         c_subs = c_subs + subs.view(B, N_sentence*N_word, c_subs.shape[-1])
+
+
         if self.opts['subs_low']:
             out_subs = self.cmat_conv_pool(
                 c_subs, subs_len,
@@ -188,20 +203,29 @@ class MCM(BaseModel):
         if not self.remove_metadata:
             vgraphs_p = vgraphs[:, :, :, 0]
             vgraphs_p_onehot = self._to_one_hot(vgraphs_p, 21, mask=bbfts_len, type3d=True)
-            vgraphs_be = vgraphs[:, :, :, 1:3].contiguous()
+            vgraphs_be = vgraphs[:, :, :, 1:5].contiguous()
             vgraphs_be = self.embedding(vgraphs_be.view(B, -1)).view(B, N_scene, N_shot, -1)
 
-            #vgraphs_full = torch.cat([bbfts, vgraphs_be, vgraphs_p_onehot], dim=3)
-            vgraphs_full = torch.cat([vgraphs_be, vgraphs_p_onehot], dim=3)
+
+            vgraphs_be = vgraphs_be.view(B, N_scene, N_shot, 4, -1)
+
+            vgraphs_full = torch.cat([self.vlinear(bbfts.view(B, N_scene, N_shot, 1, -1)), vgraphs_be], dim=3)
+            vgraphs_full = torch.sum(vgraphs_full, dim=3)
+            vgraphs_full = torch.cat([vgraphs_full, vgraphs_p_onehot], dim=3)
+
+
 
             vgraphs_p_onehot = vgraphs_p_onehot.reshape(B, -1, 21)
             vis_flag = [torch.matmul(vgraphs_p_onehot, concat_qa[i].unsqueeze(2)) for i in range(5)]
             vis_flag = [(vis_flag[i] > 0).type(torch.cuda.FloatTensor) for i in range(5)] # > 0
 
+            objs_qa_flag = [objs_qa_flag[i].unsqueeze(2).repeat(1, 1, vgraphs_full.shape[2]).reshape(B, -1).unsqueeze(2) for i in range(5)]
             c_bbfts = self.stream_context(vgraphs_full, bbfts_len, self.bilstm_bbfts) # vgraphs_full
         else:
             vis_flag = None
+            objs_qa_flag = None
             c_bbfts = self.stream_context(bbfts, bbfts_len, self.bilstm_bbfts) # vgraphs_full
+
         if self.opts['visual_low']:
             out_bbfts = self.cmat_conv_pool(
                 c_bbfts, bbfts_len,
@@ -209,7 +233,7 @@ class MCM(BaseModel):
                 self.cmat_bbfts,
                 self.conv_pool_bbfts,
                 self.clf_bbfts,
-                vis_flag, mask2d=True)
+                vis_flag, mask2d=True, subs_qa_flag=objs_qa_flag)
             out_concat.append(out_bbfts)
         else:
             out_bbfts = 0
@@ -223,7 +247,7 @@ class MCM(BaseModel):
                 self.bilstm_bbfts,
                 self.cmat_bbfts,
                 self.conv_pool_bbfts,
-                self.clf_bbfts, vis_flag)
+                self.clf_bbfts, vis_flag, subs_qa_flag=objs_qa_flag)
             out_concat.append(out_bbfts_high)
         else:
             out_bbfts_high = 0
@@ -235,7 +259,9 @@ class MCM(BaseModel):
 
         #out = self.final_clf(out_qa*out_final)
         out = torch.sum(out_final, dim=-1)
-        #out = out_subs+out_subs_high+out_bbfts+out_bbfts_high
+        if qual:
+            #out = out_subs+out_subs_high+out_bbfts+out_bbfts_high
+            return out.view(B, -1), out_final
 
         #print(out_final)
 
@@ -263,9 +289,15 @@ class MCM(BaseModel):
 
         # Concatenation
         if subs_qa_flag is None:
-            concat_all = [torch.cat([ctx, u_a[i], ctx*u_a[i], ctx_flag[i]], dim=-1) for i in range(5)]
+            if ctx_flag is None:
+                concat_all = [torch.cat([ctx, u_a[i], ctx*u_a[i]], dim=-1) for i in range(5)]
+            else:
+                concat_all = [torch.cat([ctx, u_a[i], ctx*u_a[i], ctx_flag[i]], dim=-1) for i in range(5)]
         else:
-            concat_all = [torch.cat([ctx, u_a[i], ctx*u_a[i], ctx_flag[i], subs_qa_flag[i]], dim=-1) for i in range(5)]
+            if ctx_flag is None:
+                concat_all = [torch.cat([ctx, u_a[i], ctx*u_a[i], subs_qa_flag[i]], dim=-1) for i in range(5)]
+            else:
+                concat_all = [torch.cat([ctx, u_a[i], ctx*u_a[i], ctx_flag[i], subs_qa_flag[i]], dim=-1) for i in range(5)]
         # Conv1D & max-pool
         maxout = [conv_pool(concat_all[i], ctx_len) for i in range(5)]
         #print(maxout[0].shape)
@@ -302,9 +334,15 @@ class MCM(BaseModel):
 
         # Concatenation
         if subs_qa_flag is None:
-            concat_all = [torch.cat([ctx[i], u_a[i], ctx[i]*u_a[i], ctx_flag[i]], dim=-1) for i in range(5)]
+            if ctx_flag is None:
+                concat_all = [torch.cat([ctx[i], u_a[i], ctx[i]*u_a[i]], dim=-1) for i in range(5)]
+            else:
+                concat_all = [torch.cat([ctx[i], u_a[i], ctx[i]*u_a[i], ctx_flag[i]], dim=-1) for i in range(5)]
         else:
-            concat_all = [torch.cat([ctx[i], u_a[i], ctx[i]*u_a[i], ctx_flag[i], subs_qa_flag[i]], dim=-1) for i in range(5)]
+            if ctx_flag is None:
+                concat_all = [torch.cat([ctx[i], u_a[i], ctx[i]*u_a[i], subs_qa_flag[i]], dim=-1) for i in range(5)]
+            else:
+                concat_all = [torch.cat([ctx[i], u_a[i], ctx[i]*u_a[i], ctx_flag[i], subs_qa_flag[i]], dim=-1) for i in range(5)]
 
         # Conv1D & max-pool
         maxout = [conv_pool(concat_all[i], ctx_len) for i in range(5)]

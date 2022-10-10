@@ -44,7 +44,8 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
   DramaQA/
   │
   ├── train.py - main script to start training
-  ├── test.py - evaluation of trained model
+  ├── infer_valid.py - validate trained model
+  ├── infer_test.py - get results of test split
   │
   ├── config.json - holds configuration for training
   ├── parse_config.py - class to handle config file and cli options
@@ -55,7 +56,8 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
   │   └── base_trainer.py
   │
   ├── data_loader/ - anything about data loading goes here
-  │   └── data_loaders.py
+  │   ├── data_loaders.py
+  │   └── ...
   │
   ├── model/ - models, losses, and metrics
   │   ├── model.py
@@ -78,7 +80,6 @@ DramaQA dataset is a large-scale video QA task based on a Korean popular TV show
   data/AnotherMissOh/ - default directory for storing dataset
   ├── AnotherMissOh_images/
   ├── AnotherMissOh_QA/
-  │
   ├── AnotherMissOh_visual.json
   └── AnotherMissOh_script.json
 
@@ -145,7 +146,7 @@ If you have additional information to be logged, in `_train_epoch()` of your tra
   ```
 
 ### Testing
-You can test trained model by running `test.py` passing path to the trained checkpoint by `--resume` argument.
+You can test trained model on validation split by running `infer_valid.py` passing path to the trained checkpoint by `--resume` or `-r` argument.
 
 ### Checkpoints
 You can specify the name of the training session in config files:
@@ -196,11 +197,6 @@ If you need more visualizations, use `add_scalar('tag', data)`, `add_image('tag'
 
 **Note**: You don't have to specify current steps, since `WriterTensorboard` class defined at `logger/visualization.py` will track current steps.
 
-
-## TODOs
-
-- [ ] Load specific datasets for model inputs
-- [x] Add BERT tokenizer
 
 ## License
 This project is licensed under the MIT License. See [LICENSE](https://github.com/liveseongho/DramaQA/blob/main/LICENSE) for more details.

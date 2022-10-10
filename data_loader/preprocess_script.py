@@ -98,21 +98,104 @@ def merge_qa_subtitle(new_path, qa_path, subtitle_path):
     write_json(res, new_path)
 
 
+def merge_desc_subtitle(new_path, desc_path, subtitle_path, mode):
+    print('Processing description data')
+    desc= read_json(desc_path)
+    subtitles = load_subtitle(subtitle_path)
+
+    res = []
+    for k, v in tqdm(desc.items()):
+        if mode == 'train':
+            if not (int(k[13:15]) < 13):
+                continue
+        elif mode == 'val':
+            if not (int(k[13:15]) > 12 and int(k[13:15]) < 16):
+                continue
+        else:
+            if not (int(k[13:15]) > 15):
+                continue
+
+        # in case of scene desription
+        row = {}
+        row['vid'] = k
+        row['desc'] = v
+
+
+        if k.endswith('_0000'):
+
+            vid = k
+            vid_prefix = vid[:vid.find('_0000')]
+
+            shot_subtitles = []
+            shot_st = []
+            shot_et = []
+            subtitle_sts = set()
+
+            # if vid starts with vid_prefix,
+            # add sub to shot_subtitles if the same sub has not been added yet
+            for vid, subs in subtitles.items():
+                if not vid.startswith(vid_prefix):
+                    continue
+
+                shot_st.append(subs['st'])
+                shot_et.append(subs['et'])
+
+                for sub in subs['contained_subs']:
+                    st = sub['st']
+
+                    if st in subtitle_sts:
+                        continue
+
+                    subtitle_sts.add(st)
+                    shot_subtitles.append((float(st), sub))
+
+            shot_st = sorted(shot_st, key=float)
+            shot_et = sorted(shot_et, key=float)
+            shot_subtitles.sort()
+
+            if shot_subtitles:
+                row['subtitle'] = {}
+                row['subtitle']["contained_subs"] = [sub for st, sub in shot_subtitles]
+                row['subtitle']["st"] = shot_st[0]
+                row['subtitle']["et"] = shot_et[-1]
+            else:
+                row['subtitle'] = ''
+        # in case of shot description
+        else:
+            if row['vid'] in subtitles:
+                row['subtitle'] = subtitles[row['vid']]
+            else:
+                row['subtitle'] = ''
+
+        if row['subtitle'] == '':
+            row['subtitle'] = empty_sub  # prevent empty string
+        res.append(row)
+
+    write_json(res, new_path)
+
+
 def merge_text_data(args, json_data_path):
     subtitle_path = args['subtitle_path']
-    for mode in modes:
-        ext = '.json'
-        new_path = json_data_path[mode]
-        qa_path = new_path.parent / (new_path.stem[:new_path.stem.find('_script')] + ext)
-        subtitle_path = subtitle_path
-        merge_qa_subtitle(new_path, qa_path, subtitle_path)
 
+    if not args['desc']:
+        print('Merging QA and subtitles...')
+        for mode in modes:
+            ext = '.json'
+            new_path = json_data_path[mode]
+            qa_path = new_path.parent / (new_path.stem[:new_path.stem.find('_script')] + ext)
+            merge_qa_subtitle(new_path, qa_path, subtitle_path)
+    else:
+        print('Merging descriptions and subtitles...')
+        for mode in modes:
+            new_path = json_data_path[mode]
+            new_desc_path = new_path.parent / (new_path.stem[:new_path.stem.find('_desc')] + '_desc.json')
+            #write_json(qa_sub, new_desc_path)
+            merge_desc_subtitle(new_desc_path, args['desc_path'], subtitle_path, mode)
 
 # borrowed this implementation from load_glove of tvqa_dataset.py (TVQA),
 # which borrowed from @karpathy's neuraltalk.
 def build_word_vocabulary(args, tokenizer, json_data_path, word_count_threshold=0):
     print("Building word vocabulary starts.")
-    print('Merging QA and subtitles.')
 
     merge_text_data(args, json_data_path)
 
@@ -141,10 +224,15 @@ def build_word_vocabulary(args, tokenizer, json_data_path, word_count_threshold=
     text_in_visual = set()
     for frames in visual.values():
         for frame in frames:
+            text_in_visual.add(frame['place'])
             for person in frame["persons"]:
                 person_info = person['person_info']
                 text_in_visual.add(person_info['behavior'])
                 text_in_visual.add(person_info['emotion'])
+                if len(person_info['predicate']) > 0:
+                    text_in_visual.add(person_info['predicate'])
+                for related_object in person['related_objects']:
+                    text_in_visual.add(related_object['related_object_id'])
 
     # text_in_visual.remove('')
     all_sentences.extend(text_in_visual)
@@ -238,12 +326,13 @@ def build_word_vocabulary(args, tokenizer, json_data_path, word_count_threshold=
     return vocab
 
 
-def preprocess_text(vocab, tokenizer, json_data_path, save_path):
+def preprocess_text(vocab, tokenizer, json_data_path, save_path, remove_c=False):
     print('Splitting long subtitles and converting words in text data to indices, timestamps from string to float.')
     word2idx = vocab.stoi
 
     texts = {mode: read_json(json_data_path[mode]) for mode in modes}
     for text in texts.values():
+#        print('text : ', text)
         for e in text:
             e['que'] = line_to_indices(e['que'], tokenizer, word2idx)
             e['answers'] = [line_to_indices(line, tokenizer, word2idx) for line in e['answers']]
@@ -260,7 +349,7 @@ def preprocess_text(vocab, tokenizer, json_data_path, save_path):
                     sub['et'] = float(sub['et'])
                     sub['st'] = float(sub['st'])
                     sub['speaker'] = speaker_index[sub['speaker']]  # to speaker index
-                    split_subs = split_subtitle(sub, tokenizer, to_indices=True, word2idx=word2idx)
+                    split_subs = split_subtitle(sub, tokenizer, to_indices=True, word2idx=word2idx, remove_c=remove_c)
                     new_subs.extend(split_subs)
 
                 subtitle['contained_subs'] = new_subs
@@ -275,7 +364,6 @@ def preprocess_text(vocab, tokenizer, json_data_path, save_path):
         save_pickle(texts[mode], save_path[mode])
 
     del texts
-
 
 # borrowed this implementation from TVQA (load_glove of tvqa_dataset.py)
 def load_glove(glove_path):
@@ -293,7 +381,7 @@ def load_glove(glove_path):
     return glove, embedding_dim
 
 
-def split_subtitle(sub, tokenizer, sos=True, eos=True, to_indices=False, word2idx=None):
+def split_subtitle(sub, tokenizer, sos=True, eos=True, to_indices=False, word2idx=None, remove_c=False):
     if to_indices and word2idx is None:
         raise ValueError('word2idx should be given when to_indices is True')
 
@@ -302,7 +390,7 @@ def split_subtitle(sub, tokenizer, sos=True, eos=True, to_indices=False, word2id
     t_range = et - st
     speaker = sub['speaker']
 
-    utters = split_string(sub['utter'], tokenizer, sos=sos, eos=eos)
+    utters = split_string(sub['utter'], tokenizer, sos=sos, eos=eos, remove_c=remove_c)
     if to_indices:
         utters = [words_to_indices(words, word2idx) for words in utters]
 
@@ -321,12 +409,41 @@ def split_subtitle(sub, tokenizer, sos=True, eos=True, to_indices=False, word2id
     return subs
 
 
+def split_subtitle_gpt(sub, tokenizer, split_tool, sos=True, eos=True, to_indices=False, word2idx=None):
+#    if to_indices and word2idx is None:
+#        raise ValueError('word2idx should be given when to_indices is True')
+
+    n_special_tokens = sos + eos  # True == 1, False == 0
+    st, et = sub['st'], sub['et']
+    t_range = et - st
+    speaker = sub['speaker']
+
+    utters = split_string(sub['utter'], split_tool, sos=sos, eos=eos)
+    if to_indices:
+        utters = [tokenize(words, tokenizer) for words in utters]
+#        utters = [words_to_indices(words, word2idx) for words in utters]
+
+    if len(utters) == 1:
+        sub['utter'] = utters[0]
+
+        return [sub]
+
+    utters_len = np.array([len(u) - n_special_tokens for u in utters])  # -2 for <sos> and <eos>
+    ratio = utters_len.cumsum() / utters_len.sum()
+    ets = st + ratio * t_range
+    sts = [st] + list(ets[:-1])
+
+    subs = [dict(speaker=speaker, st=s, et=e, utter=u) for s, e, u in zip(sts, ets, utters)]
+
+    return subs
+
+
 # Split a string with multiple sentences to multiple strings with one sentence.
-def split_string(string, tokenizer, min_sen_len=3, sos=True, eos=True):
+def split_string(string, tokenizer, min_sen_len=3, sos=True, eos=True, remove_c=False):
     eos_re = re.compile(r'[\s]*[.?!]+[\s]*')
     split = eos_re.split(string)
     split = list(filter(None, split))  # remove ''
-    split = [line_to_words(s, tokenizer, sos=sos, eos=eos) for s in split]  # tokenize each split sentence
+    split = [line_to_words(s, tokenizer, sos=sos, eos=eos, remove_c=remove_c) for s in split]  # tokenize each split sentence
 
     # Merge short sentences to adjacent sentences
     n_special_tokens = sos + eos  # True == 1, False == 0
@@ -387,7 +504,7 @@ def remove_coreference(line):
 
 
 # borrowed this implementation from TVQA (line_to_words of tvqa_dataset.py)
-def line_to_words(line, tokenizer, remove_c=False, sos=True, eos=True, downcase=True):
+def line_to_words(line, tokenizer, sos=True, eos=True, downcase=True, remove_c=False):
     if remove_c:
         line = remove_coreference(line)
 

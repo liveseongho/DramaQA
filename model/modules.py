@@ -129,3 +129,28 @@ class MHAttn(nn.Module):
 
         return output
 
+
+
+class LinearLayer(nn.Module):
+    """linear layer configurable with layer normalization, dropout, ReLU."""
+
+    def __init__(self, in_hsz, out_hsz, layer_norm=True, dropout=0.1, relu=True):
+        super(LinearLayer, self).__init__()
+        self.relu = relu
+        self.layer_norm = layer_norm
+        if layer_norm:
+            self.LayerNorm = nn.LayerNorm(in_hsz)
+        layers = [
+            nn.Dropout(dropout),
+            nn.Linear(in_hsz, out_hsz)
+        ]
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        """(N, L, D)"""
+        if self.layer_norm:
+            x = self.LayerNorm(x)
+        x = self.net(x)
+        if self.relu:
+            x = F.relu(x, inplace=True)
+        return x  # (N, L, D)

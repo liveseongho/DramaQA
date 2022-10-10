@@ -4,7 +4,9 @@ import torch
 
 from utils import *
 from .preprocess_script import empty_sub, build_word_vocabulary, preprocess_text
-from .preprocess_image import preprocess_images
+from .preprocess_image import preprocess_images, load_visual
+from os.path import isfile
+
 from .modules_language import get_tokenizer
 import os
 import numpy as np
@@ -54,9 +56,10 @@ class TextData:
         self.bert_data_path = {m: self.get_data_path(args, mode=m, ext='_bert.pickle') for m in modes}
 
         self.tokenizer, self.vocab = get_tokenizer(args)
+
         '''
         if not os.path.isfile(self.bert_data_path[mode]):
-            self.preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.bert_data_path)
+            preprocess_text(self.vocab, self.tokenizer, self.json_data_path, self.bert_data_path)
 
         # load data
         print("Loading dataset from path: %s." % self.bert_data_path[mode])
@@ -110,32 +113,40 @@ class ImageData:
         self.vocab = vocab
         self.pad_index = vocab.get(pad_token)
         self.none_index = vocab.get('None')
-        self.visual_pad = [self.none_index, self.pad_index, self.pad_index]
+        self.visual_pad = [self.none_index, self.pad_index, self.pad_index, self.pad_index, self.pad_index]
 
         self.image_path = args['image_path']
+        self.image_cache_path = args['image_cache_path']
         self.image_dim = args['image_dim']
+        self.image_feature_path = args['image_feature']
 
-        self.processed_video_path = self.get_processed_video_path(self.image_path)
+        self.processed_video_path = self.get_processed_video_path(self.image_cache_path)
         if not os.path.isfile(self.processed_video_path[mode]):
-            self.process_video(args, self.processed_video_path, speaker_index, vocab)
+            self.process_video(args, self.processed_video_path, self.image_feature_path, speaker_index, vocab)
 
         print("Loading processed video input from path: %s." % self.processed_video_path[mode])
         self.image_dt = load_pickle(self.processed_video_path[mode])
 
     def get_processed_video_path(self, image_path):
-        return {m: Path(image_path) / 'cache' / ('processed_video_bert_' + m + '.pickle') for m in modes}
+        return {m: Path(image_path) / ('processed_video_bert_' + m + '.pickle') for m in modes}
 
-    def process_video(self, args, save_path, speaker_index, vocab):
+
+    def process_video(self, args, save_path, feature_path, speaker_index, vocab):
         pad_index = vocab.get(pad_token)
         none_index = speaker_index['None']
 
-        print("saving processed_video ...")
-        features, visuals = preprocess_images(args)
+        visuals = load_visual(args)
+        if isfile(feature_path):
+            features = load_pickle(feature_path)
+        else:
+            print("saving processed_video ...")
+            features = preprocess_images(args, visuals)
+            save_pickle(features, feature_path)
 
         """
         {
             full_image:   full_image (tensor of shape (512,)),
-            persons:      [[person1_id_idx, behavior1_idx, emotion1_idx], ...],
+            person_list:      [[person1_id_idx, behavior1_idx, emotion1_idx], ...],
             person_fulls: [person_full1 (tensor of shape (512,)), ... ]
         }
         """
@@ -168,14 +179,16 @@ class ImageData:
                 for key, value in frames.items():
                     frames[key] = {
                         'full_image': value,
-                        'persons': [],
-                        'person_fulls': []
+                        'person_list': [],
+                        'person_fulls': [],
+                        'object_list': [],
+                        'place' : ''
                     }
                     if vid not in visuals[scene_vid] or key not in visuals[scene_vid][vid]:
                         continue
 
                     visual = visuals[scene_vid][vid][key]
-                    processed_p = frames[key]['persons']
+                    processed_p = frames[key]['person_list']
 
                     for person in visual["persons"]:
                         person_id = person['person_id'].title()
@@ -184,16 +197,34 @@ class ImageData:
                         person_info = person['person_info']
 
                         behavior = person_info['behavior'].lower()
-                        behavior_idx = pad_index if behavior == '' or behavior is None else vocab.get(behavior.split()[0])
+                        behavior_idx = pad_index if behavior == '' else vocab.get(behavior.split()[0])
 
                         emotion = person_info['emotion'].lower()
-                        emotion_idx = pad_index if emotion == '' or emotion is None else vocab.get(emotion)
+                        emotion_idx = pad_index if emotion == '' else vocab.get(emotion)
 
-                        processed = [person_id_idx, behavior_idx, emotion_idx] # Don't convert visual to a tensor yet
+                        if len(person['related_objects']) > 0:
+                            related_obj_id = person['related_objects'][0]['related_object_id'].lower()
+                            related_obj_id_idx = vocab.get(related_obj_id)
+                            relation = person['person_info']['predicate'].lower()
+                            relation_idx = vocab.get(relation)
+                        else:
+                            related_obj_id_idx = pad_index
+                            relation_idx = pad_index
+
+                        processed = [person_id_idx, behavior_idx, emotion_idx, related_obj_id_idx, relation_idx] # Don't convert visual to a tensor yet
                         processed_p.append(processed)
 
                     if processed_p:
                         frames[key]['person_fulls'] = list(person_fulls[scene_vid][vid][key])
+
+                    obj_list = list()
+                    for obj in visual["objects"]:
+                        obj_id = obj['object_id']
+                        obj_id_idx = vocab.get(obj_id)
+                        obj_list.append(obj_id_idx)
+
+                    frames[key]['object_list'] = obj_list
+                    frames[key]['place'] = pad_index if visual['place'] == '' else vocab.get(visual['place'])
 
         vids_list = list()
         qa_paths = {m: Path(args['qa_path']) / 'AnotherMissOhQA_{}_set.json'.format(m) for m in modes}
@@ -214,6 +245,7 @@ class ImageData:
         full_images_by_modes = {mode: {k: full_images[k] for k in scene_vids[mode]} for mode in modes}
         for mode in modes:
             save_pickle(full_images_by_modes[mode], save_path[mode])
+
 
     def get_bbft(self, vid, flatten=False):
         bb_features = []
@@ -245,7 +277,7 @@ class ImageData:
                     bb_feature.extend([frame['full_image']])
                 else:
                     bb_feature.extend(frame['person_fulls'])
-                vis_graph.extend(frame['persons'])
+                vis_graph.extend(frame['person_list'])
 
             if not bb_feature:
                 vis_graph = self.visual_pad
@@ -343,31 +375,7 @@ class MultiModalData_BERT(Dataset):
 
             sentences.extend(batch_sentences[i])
 
-        o = self.tokenizer(sentences, padding=True, truncation=True, max_length=self.max_sen_len)
-
-        o = {k: [v[T_max*i:T_max*(i+1)] for i in range(batch_size)] for k, v in o.items()}
-
-        max_l_l = [[sum(o['attention_mask'][i][j]) for j in range(T_max)] for i in range(batch_size)]
-
-        for k, v in o.items():
-            o[k] = [[sent[:max(max_l_l)] for sent in batch] for batch in v]
-
-        # max_l = [max(max_l_l[i]) for i in range(batch_size)]
-        return o, torch.tensor(T1), torch.tensor(max_l_l)
-
-    def bs2bi(self, batch_sentences):
-        batch_size = len(batch_sentences)
-        T1 = [len(batch_sentences[i]) for i in range(batch_size)]
-        T_max = max(T1)
-        sentences = []
-
-        for i in range(batch_size):
-            if len(batch_sentences[i]) < T_max:
-                batch_sentences[i].extend([pad_token] * (T_max-len(batch_sentences[i])))
-
-            sentences.extend(batch_sentences[i])
-
-        o = self.tokenizer(sentences, padding=True, truncation=True, max_length=self.max_sen_len)
+        o = self.tokenizer(sentences, padding=True, truncation=True, max_length=40)
 
         o = {k: [v[T_max*i:T_max*(i+1)] for i in range(batch_size)] for k, v in o.items()}
 
@@ -379,7 +387,7 @@ class MultiModalData_BERT(Dataset):
     def bs2bi2d(self, batch_sentences):
         batch_size = len(batch_sentences)
 
-        o = self.tokenizer(batch_sentences, padding=True, truncation=True, max_length=self.max_sen_len)
+        o = self.tokenizer(batch_sentences, padding=True, truncation=True, max_length=40)
         max_l = [sum(o['attention_mask'][i]) for i in range(batch_size)]
         o = {k: v for k, v in o.items()}
         # max_l = [max(max_l_l[i]) for i in range(batch_size)]
@@ -400,7 +408,7 @@ class MultiModalData_BERT(Dataset):
         }
 
         if self.args['cc_qa']:
-            qa_concat = [[collected['que'][j] + ' ' + collected['ans'][j][i] for j in range(len(collected['que']))] for i in range(5)]
+            qa_concat = [[collected['que'][j] + '? ' + collected['ans'][j][i] + '. ' for j in range(len(collected['que']))] for i in range(5)]
             qa_concat_dict, max_l, qa_concat_l = [], [], []
             for i in range(5):
                 input1, input2 = self.bs2bi2d(qa_concat[i])
@@ -438,7 +446,7 @@ class MultiModalData_BERT(Dataset):
             vgraphs, vgraphs_l = pad2d(collected['vgraphs'], self.image.visual_pad, int_dtype)
         elif self.args['visual_type'] == 'shot':
             bbfts, bbfts_l, bbfts_l_l = pad3d(collected['bbfts'], 0, float_dtype, reshape4d=True, last_dim=self.image_dim)
-            vgraphs, vgraphs_l, _ = pad3d(collected['vgraphs'], self.image.visual_pad, int_dtype, reshape4d=True, last_dim=3)
+            vgraphs, vgraphs_l, _ = pad3d(collected['vgraphs'], self.image.visual_pad, int_dtype, reshape4d=True, last_dim=5)
 
         data['bbfts'] = bbfts
         data['bbfts_l'] = bbfts_l

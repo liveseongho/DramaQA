@@ -25,7 +25,7 @@
     "data_loader": {
         "type": "DramaQADataLoader",
         "args":{
-            "batch_size": 16,
+            "batch_size": 4,
             "shuffle": true,
             "num_workers": 0,
 
@@ -41,12 +41,14 @@
             "lower": true,
             "save_cache": true,
             "image_path": "/data/dataset/AnotherMissOh/AnotherMissOh_images",
-            "visual_path": "/data/dataset/AnotherMissOh/AnotherMissOh_Visual.json",
-            "data_path": "/data/dataset/AnotherMissOh/AnotherMissOh_QA/AnotherMissOhQA_set_script.jsonl",
+            "image_feature": "/data/dataset/AnotherMissOh/visual_cache/resnet18.pickle",
+            "image_cache_path": "/data/dataset/AnotherMissOh/visual_cache/cache_v3_resnet18_full",
+            "visual_path": "/data/dataset/AnotherMissOh/AnotherMissOh_visual.json",
+            "data_path": "/data/dataset/AnotherMissOh/DramaQA/AnotherMissOhQA_set_script.jsonl",
             "subtitle_path": "/data/dataset/AnotherMissOh/AnotherMissOh_script.json",
-            "qa_path": "/data/dataset/AnotherMissOh/AnotherMissOh_QA",
+            "qa_path": "/data/dataset/AnotherMissOh/DramaQA",
             "glove_path": "/data/dataset/AnotherMissOh/glove.6B.300d.txt",
-            "vocab_path": "/data/dataset/AnotherMissOh/vocab.pickle",
+            "vocab_path": "/data/dataset/AnotherMissOh/DramaQA/vocab.pickle",
 
             "image_dim": 512,
 
@@ -56,6 +58,7 @@
             "max_image_len": 100,
             "max_frame_per_shot": 10,
             "max_shot_per_scene": 30,
+            "max_obj_per_shot": 10,
 
             "inputs":[
                 "que", "que_l",
@@ -76,8 +79,8 @@
             "visual_type": "shot",
             "cc_spkr": false,
             "cc_qa": true,
-            "flatten": false
-
+            "flatten": false,
+            "desc": false
         }
     },
     "optimizer": {
@@ -107,7 +110,7 @@
         }
     },
     "trainer": {
-        "epochs": 10,
+        "epochs": 20,
 
         "save_dir": "/data/results/",
         "save_period": 1,

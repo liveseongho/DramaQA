@@ -72,12 +72,13 @@ def get_tokenizer(args, special_tokens=None):
             pad_token=pad_token,
             additional_special_tokens=speaker_name)
         '''
+        '''
         for i, spk in enumerate(speaker_name):
             if spk not in tok.vocab.keys():
                 tok.vocab.pop('[unused{}]'.format(i+1))
                 tok.vocab[spk] = i+1
         print("Added main characters in BERT tokenizer.")
-
+        '''
         return tok, tok.vocab
     else:
         tokenizers = {
